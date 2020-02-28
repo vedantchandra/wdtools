@@ -80,13 +80,13 @@ class SpecTools():
 		xcorrs = crosscorrRV(wl,1-normflux,wl,cores, -1250, 1250, 50, 'doppler', skipedge = 25)
 		corrs = xcorrs[1]
 		rvs = xcorrs[0]
-		plt.plot(rvs,corrs)
+		# plt.plot(rvs,corrs)
 		try:
 			p = np.polyfit(rvs, corrs, 2)
 			specrv = - p[1] / (2*p[0])
-			plt.plot(rvs,np.polyval(p,rvs))
-			plt.axvline(specrv)
-			print(specrv)
+			# plt.plot(rvs,np.polyval(p,rvs))
+			# plt.axvline(specrv)
+			# print(specrv)
 		except:
 			print('find rv failed. defaulting to zero')
 			specrv = 0
@@ -95,7 +95,7 @@ class SpecTools():
 
 	def interpolate(self, wl, flux, target_wl = np.arange(4000,8000)):
 		func = interp1d(wl, flux, kind='linear', assume_sorted = True, fill_value = 'extrapolate')
-		interpflux = func(target_wl)
+		interpflux = func(target_wl)[1]
 		return target_wl,interpflux
 
 class RVTools():

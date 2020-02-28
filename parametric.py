@@ -30,7 +30,7 @@ class LineProfiles:
 	For more details, run help(LineProfiles)
 	'''
 
-	def __init__(self, verbose = False, plot_profiles = False, modelname = 'rf', n_trees = 25, n_bootstrap = 25):
+	def __init__(self, verbose = False, plot_profiles = False, modelname = 'bootstrap', n_trees = 25, n_bootstrap = 25):
 
 		self.verbose = verbose
 		self.optimizer = 'dual_annealing'
@@ -113,7 +113,7 @@ class LineProfiles:
 
 		return result
 
-	def fit_balmer(self, wl, flux):
+	def fit_balmer(self, wl, flux, return_centroids = True):
 		''' Fit 3 Balmer Lines
 		Input: spectrum wavelength, spectrum flux
 		Output: 15 Balmer parameters in array
@@ -128,10 +128,15 @@ class LineProfiles:
 			raise
 		except:
 			print('profile fit failed! returning NaN...')
-			return np.repeat(np.nan, 18)
+			if fit_centroids == True:
+				return np.repeat(np.nan, 18)
+			else:
+				return np.repeat(np.nan, 15)
 
 		balmer_parameters = np.concatenate((alpha_parameters, beta_parameters, gamma_parameters))
 
+		if return_centroids == False:
+			balmer_parameters = np.delete(balmer_parameters, [1,7,13]) # Drop line centroids since they aren't used in the model. 
 
 		return balmer_parameters
 
@@ -166,7 +171,8 @@ class LineProfiles:
 		Returns inferred stellar labels from 15 Balmer line parameters. 
 		Pass the output of fit_balmer to this. 
 		'''
-		balmer_parameters = np.delete(balmer_parameters, [1,7,13]).reshape(1,-1) # Drop line centroids since they aren't used in the model. 
+		if balmer_parameters.shape[0] == 18:
+			balmer_parameters = np.delete(balmer_parameters, [1,7,13]).reshape(1,-1) # Drop line centroids since they aren't used in the model. 
 		
 		if np.isnan(balmer_parameters).any():
 			print('NaNs detected! Aborting...')
@@ -188,7 +194,14 @@ class LineProfiles:
 			std_prediction = np.std(predictions,0)
 			labels = np.asarray([mean_prediction[0], std_prediction[0],mean_prediction[1], std_prediction[1]])
 			
-			return labels 
+			return labels
+
+	def save(self, modelname = 'wd'):
+		pickle.dump(self.bootstrap_models, open(dir_path+'/models/'+modelname+'.p', 'wb'))
+		print('model saved!')
+
+	def load(self, modelname = 'wd'):
+		self.bootstrap_models = pickle.load(open(dir_path+'/models/'+modelname+'.p', 'rb'))
 
 	def labels_from_spectrum(self, wl, flux):
 		''' Predict Labels from Spectrum
