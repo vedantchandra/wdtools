@@ -9,7 +9,7 @@ import os
 plt.rcParams.update({'font.size': 18})
 path = os.path.abspath(__file__)
 dir_path = os.path.dirname(path)
-from .neural import ANN
+# from .neural import ANN
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.utils import resample
 
@@ -33,7 +33,7 @@ class LineProfiles:
 	def __init__(self, verbose = False, plot_profiles = False, modelname = 'bootstrap', n_trees = 25, n_bootstrap = 25):
 
 		self.verbose = verbose
-		self.optimizer = 'dual_annealing'
+		self.optimizer = 'lm'
 		self.halpha = 6564.61
 		self.hbeta = 4862.68
 		self.hgamma = 4341.68
@@ -91,9 +91,9 @@ class LineProfiles:
 		voigtfitter = VoigtModel()
 		params = voigtfitter.make_params()
 		params['amplitude'].set(min = 0,max = 100,value = 25)
-		params['center'].set(value = centroid)
+		params['center'].set(value = centroid, max = centroid + 25, min = centroid - 25)
 		params['sigma'].set(min = 0, max=200, value=10)
-		params['gamma'].set(value=10, min = 0, max=200, vary=True)
+		params['gamma'].set(value=10, min = 0, max=200, vary = True)
 
 		result = voigtfitter.fit(continuum_normalized, params, x = cropped_wl, nan_policy = 'omit', method=self.optimizer, fit_kws={'reduce_fcn':self.chisquare})
 
@@ -127,8 +127,9 @@ class LineProfiles:
 		except KeyboardInterrupt:
 			raise
 		except:
+			raise
 			print('profile fit failed! returning NaN...')
-			if fit_centroids == True:
+			if return_centroids == True:
 				return np.repeat(np.nan, 18)
 			else:
 				return np.repeat(np.nan, 15)
