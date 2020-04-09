@@ -92,7 +92,7 @@ class LineProfiles:
 		params = voigtfitter.make_params()
 		params['amplitude'].set(min = 0,max = 100,value = 25)
 		params['center'].set(value = centroid, max = centroid + 25, min = centroid - 25)
-		params['sigma'].set(min = 0, max=200, value=10)
+		params['sigma'].set(min = 0, max=200, value=10, vary = True)
 		params['gamma'].set(value=10, min = 0, max=200, vary = True)
 
 		result = voigtfitter.fit(continuum_normalized, params, x = cropped_wl, nan_policy = 'omit', method=self.optimizer, fit_kws={'reduce_fcn':self.chisquare})
@@ -174,6 +174,8 @@ class LineProfiles:
 		'''
 		if balmer_parameters.shape[0] == 18:
 			balmer_parameters = np.delete(balmer_parameters, [1,7,13]).reshape(1,-1) # Drop line centroids since they aren't used in the model. 
+		else:
+			balmer_parameters = balmer_parameters.reshape(1,-1)
 		
 		if np.isnan(balmer_parameters).any():
 			print('NaNs detected! Aborting...')
@@ -214,7 +216,7 @@ class LineProfiles:
 		and deploying a single model of choice to make an inference.
 		'''
 
-		balmer_parameters = self.fit_balmer(wl,flux) 
+		balmer_parameters = self.fit_balmer(wl,flux, return_centroids = False) 
 		predictions = self.labels_from_parameters(balmer_parameters) # Deploy instantiated model. Defaults to random forest. 
 
 
