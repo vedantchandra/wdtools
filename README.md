@@ -1,5 +1,5 @@
 # wdtools (WIP)
-Package of tools to analyze white dwarf spectra. 
+Package of tools to analyze white dwarf spectra. This is a work in progress, kindly contact the author for details regarding the current stage of development. 
 
 To get started, clone the repository to your working folder. Each module can be imported into Python. Full documentation is WIP, refer to inbuilt docstrings with help() for a list of functions with descriptions for each class. 
 
