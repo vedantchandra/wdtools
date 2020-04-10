@@ -42,6 +42,7 @@ class LineProfiles:
 		self.n_trees = n_trees
 		self.n_bootstrap = n_bootstrap
 		self.modelname = modelname
+		self.linedict = dict(alpha = self.halpha, beta = self.hbeta, gamma = self.hgamma)
 
 		print('### Line Profiles Tool for White Dwarf Spectra ### \n')
 		print('Verbose: '+str(verbose)+', plot_profiles: '+str(plot_profiles))
@@ -51,6 +52,8 @@ class LineProfiles:
 			self.model = RandomForestRegressor(n_estimators = self.n_trees)
 		elif self.modelname == 'bootstrap':
 			self.bootstrap_models = [];
+
+		self.load('all')
 
 
 	def linear(self, wl, p1, p2):
@@ -113,34 +116,51 @@ class LineProfiles:
 
 		return result
 
-	def fit_balmer(self, wl, flux, return_centroids = True):
+	def fit_balmer(self, wl, flux, line = 'all', return_centroids = True):
 		''' Fit 3 Balmer Lines
 		Input: spectrum wavelength, spectrum flux
 		Output: 15 Balmer parameters in array
 
 		Wrapper that runs fit_line on all 3 Balmer lines and returns 5x3 = 15 line parameters from the spectrum. 
 		'''
-		try:
-			alpha_parameters = self.fit_line(wl, flux, self.halpha).params
-			beta_parameters = self.fit_line(wl, flux, self.hbeta).params
-			gamma_parameters = self.fit_line(wl, flux, self.hgamma, window = 150, edges = 75).params # Modified window for H-Gamma due to the nearby H-Delta line
-		except KeyboardInterrupt:
-			raise
-		except:
-			raise
-			print('profile fit failed! returning NaN...')
-			if return_centroids == True:
-				return np.repeat(np.nan, 18)
-			else:
-				return np.repeat(np.nan, 15)
+		if self.line == 'all':
+			try:
+				alpha_parameters = self.fit_line(wl, flux, self.halpha).params
+				beta_parameters = self.fit_line(wl, flux, self.hbeta).params
+				gamma_parameters = self.fit_line(wl, flux, self.hgamma, window = 150, edges = 75).params # Modified window for H-Gamma due to the nearby H-Delta line
+			except KeyboardInterrupt:
+				raise
+			except:
+				raise
+				print('profile fit failed! returning NaN...')
+				if return_centroids == True:
+					return np.repeat(np.nan, 18)
+				else:
+					return np.repeat(np.nan, 15)
 
-		balmer_parameters = np.concatenate((alpha_parameters, beta_parameters, gamma_parameters))
+			balmer_parameters = np.concatenate((alpha_parameters, beta_parameters, gamma_parameters))
 
-		if return_centroids == False:
-			balmer_parameters = np.delete(balmer_parameters, [1,7,13]) # Drop line centroids since they aren't used in the model. 
+			if return_centroids == False:
+				balmer_parameters = np.delete(balmer_parameters, [1,7,13]) # Drop line centroids since they aren't used in the model. 
 
-		return balmer_parameters
+			return balmer_parameters
+		else:
+			try:
+				parameters = self.fit_line(wl, flux, self.linedict[self.line]).params
+			except KeyboardInterrupt:
+				raise
+			except:
+				raise
+				print('fit failed OR invalid line passed, returning NaN')
+				if return_centroids == True:
+					return np.repeat(np.nan, 6)
+				else:
+					return np.repeat(np.nan, 5)
 
+			if return_centroids == False:
+				parameters = np.delete(parameters, 1) # Drop line centroids since they aren't used in the model. 
+
+			return parameters
 
 	def train(self, x_data, y_data):
 		'''
@@ -172,6 +192,7 @@ class LineProfiles:
 		Returns inferred stellar labels from 15 Balmer line parameters. 
 		Pass the output of fit_balmer to this. 
 		'''
+
 		if balmer_parameters.shape[0] == 18:
 			balmer_parameters = np.delete(balmer_parameters, [1,7,13]).reshape(1,-1) # Drop line centroids since they aren't used in the model. 
 		else:
@@ -199,6 +220,9 @@ class LineProfiles:
 			
 			return labels
 
+		else:
+			print('Please define a model!')
+
 	def save(self, modelname = 'wd'):
 		pickle.dump(self.bootstrap_models, open(dir_path+'/models/'+modelname+'.p', 'wb'))
 		print('model saved!')
@@ -221,10 +245,3 @@ class LineProfiles:
 
 
 		return predictions
-
-
-	def pretty_infer_labels(self, wl, flux):
-		''' Same as infer_labels, but prints output as well'''
-		labels = self.infer_labels(wl,flux)
-		print(r'Teff = %i ± %i K, log(g) = %.2f ± %0.2f dex'%(labels[0],labels[1],labels[2],labels[3]))
-		return labels
