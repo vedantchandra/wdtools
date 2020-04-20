@@ -7,6 +7,13 @@ To get started, clone the repository to your working folder. Each module can be 
 
 Spectral processing tools like continuum-normalization, line fitting, and absorption line centroid determination (for radial velocity).
 
+```python
+from wdtools.spectrum import SpecTools
+spectools = SpecTools()
+
+wl_norm, fl_norm = spectools.normalize_balmer(wl, fl)
+```
+
 ## Parametric
 
 Functions to infer effective temperature and surface gravity from parametric measures of the Balmer absorption lines. Includes routines to fit the absorption lines and subsequently make inferences with a random forest regression model. Also includes a bootstrapped random forest regression model to produce labels with uncertainties. 
