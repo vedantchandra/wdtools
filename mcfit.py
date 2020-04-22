@@ -34,15 +34,25 @@ plt.rcParams.update({'font.size': 16})
 class MCFit:
 
     def __init__(self, resolution = 3):
-        self.H = 64
+        self.H = 256
         self.reg = 0.0001
         self.lamgrid = pickle.load(open(dir_path + '/models/neural_gen/lamgrid.p', 'rb'))
-        self.sc = pickle.load(open(dir_path + '/models/neural_gen/normNN_sc.p', 'rb'))
-        self.msc = pickle.load(open(dir_path + '/models/neural_gen/normNN_msc.p', 'rb'))
         self.model = self.generator()
-        self.model.load_weights(dir_path + '/models/neural_gen/smallgrid_normNN.h5')
+        self.model.load_weights(dir_path + '/models/neural_gen/new_normNN.h5')
         self.resolution = resolution
 
+    def label_sc(self, label_array):
+        teffs = label_array[:, 0];
+        loggs = label_array[:, 1];
+        teffs = (teffs - 2500) / (100000 - 2500)
+        loggs = (loggs - 5) / (10 - 5)
+        return np.vstack((teffs, loggs)).T
+    def inv_label_sc(self, label_array):
+        teffs = label_array[:, 0];
+        loggs = label_array[:, 1];
+        teffs = (teffs * (100000 - 2500)) + 2500
+        loggs = (loggs * (10 - 5)) + 5
+        return np.vstack((teffs, loggs)).T
 
     def generator(self):
         x = Input(shape=(2,))
@@ -56,7 +66,7 @@ class MCFit:
         return model
 
     def spectrum_sampler(self, wl, teff, logg, rv):
-        label = self.sc.transform(np.asarray(np.stack((teff,logg)).reshape(1,-1)))
+        label = self.label_sc(np.asarray(np.stack((teff,logg)).reshape(1,-1)))
         synth = dopplerShift(self.lamgrid,np.ravel(
                         (
                                 self.model.predict(label))[0]

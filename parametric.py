@@ -12,6 +12,7 @@ dir_path = os.path.dirname(path)
 # from .neural import ANN
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.utils import resample
+import scipy
 
 class LineProfiles:
 	
@@ -43,6 +44,9 @@ class LineProfiles:
 		self.n_bootstrap = n_bootstrap
 		self.modelname = modelname
 		self.linedict = dict(alpha = self.halpha, beta = self.hbeta, gamma = self.hgamma)
+		self.features = features = ['a_amp', 'a_fwhm', 'a_height',
+                                    'b_amp', 'b_fwhm', 'b_height',
+                                    'g_amp', 'g_fwhm', 'g_height']
 
 		print('### Line Profiles Tool for White Dwarf Spectra ### \n')
 		print('Verbose: '+str(verbose)+', plot_profiles: '+str(plot_profiles))
@@ -123,44 +127,26 @@ class LineProfiles:
 
 		Wrapper that runs fit_line on all 3 Balmer lines and returns 5x3 = 15 line parameters from the spectrum. 
 		'''
-		if self.line == 'all':
-			try:
-				alpha_parameters = self.fit_line(wl, flux, self.halpha).params
-				beta_parameters = self.fit_line(wl, flux, self.hbeta).params
-				gamma_parameters = self.fit_line(wl, flux, self.hgamma, window = 150, edges = 75).params # Modified window for H-Gamma due to the nearby H-Delta line
-			except KeyboardInterrupt:
-				raise
-			except:
-				raise
-				print('profile fit failed! returning NaN...')
-				if return_centroids == True:
-					return np.repeat(np.nan, 18)
-				else:
-					return np.repeat(np.nan, 15)
+		try:
+			alpha_parameters = self.fit_line(wl, flux, self.halpha).params
+			beta_parameters = self.fit_line(wl, flux, self.hbeta).params
+			gamma_parameters = self.fit_line(wl, flux, self.hgamma, window = 150, edges = 75).params # Modified window for H-Gamma due to the nearby H-Delta line
+		except KeyboardInterrupt:
+			raise
+		except:
+			raise
+			print('profile fit failed! returning NaN...')
+			if return_centroids == True:
+				return np.repeat(np.nan, 18)
+			else:
+				return np.repeat(np.nan, 15)
 
-			balmer_parameters = np.concatenate((alpha_parameters, beta_parameters, gamma_parameters))
+		balmer_parameters = np.concatenate((alpha_parameters, beta_parameters, gamma_parameters))
 
-			if return_centroids == False:
-				balmer_parameters = np.delete(balmer_parameters, [1,7,13]) # Drop line centroids since they aren't used in the model. 
+		if return_centroids == False:
+			balmer_parameters = np.delete(balmer_parameters, [1,7,13]) # Drop line centroids since they aren't used in the model. 
 
-			return balmer_parameters
-		else:
-			try:
-				parameters = self.fit_line(wl, flux, self.linedict[self.line]).params
-			except KeyboardInterrupt:
-				raise
-			except:
-				raise
-				print('fit failed OR invalid line passed, returning NaN')
-				if return_centroids == True:
-					return np.repeat(np.nan, 6)
-				else:
-					return np.repeat(np.nan, 5)
-
-			if return_centroids == False:
-				parameters = np.delete(parameters, 1) # Drop line centroids since they aren't used in the model. 
-
-			return parameters
+		return balmer_parameters
 
 	def train(self, x_data, y_data):
 		'''
@@ -173,9 +159,16 @@ class LineProfiles:
 			return None
 
 		elif self.modelname == 'bootstrap':
+			self.bootstrap_models = [];
+			kernel = scipy.stats.gaussian_kde(y_data.T)
+			probs = kernel.pdf(y_data.T)
+			weights = 1 / probs
+			weights = weights / np.nansum(weights)
 			
 			for i in range(self.n_bootstrap):
-				X_sample, t_sample = resample(x_data, y_data, replace = True, n_samples = int(len(x_data)*0.67))
+				idxarray = np.arange(len(x_data))
+				sampleidx = np.random.choice(idxarray, size = int(len(idxarray)*0.67), replace = True, p = weights)
+				X_sample, t_sample = x_data[sampleidx], y_data[sampleidx]
 				rf = RandomForestRegressor(n_estimators = self.n_trees)
 				rf.fit(X_sample,t_sample)
 				self.bootstrap_models.append(rf)
@@ -193,10 +186,7 @@ class LineProfiles:
 		Pass the output of fit_balmer to this. 
 		'''
 
-		if balmer_parameters.shape[0] == 18:
-			balmer_parameters = np.delete(balmer_parameters, [1,7,13]).reshape(1,-1) # Drop line centroids since they aren't used in the model. 
-		else:
-			balmer_parameters = balmer_parameters.reshape(1,-1)
+		balmer_parameters = balmer_parameters.reshape(1,-1)
 		
 		if np.isnan(balmer_parameters).any():
 			print('NaNs detected! Aborting...')
@@ -240,7 +230,14 @@ class LineProfiles:
 		and deploying a single model of choice to make an inference.
 		'''
 
-		balmer_parameters = self.fit_balmer(wl,flux, return_centroids = False) 
+		balmer_parameters = self.fit_balmer(wl,flux, return_centroids = True) 
+
+		df = pd.DataFrame([balmer_parameters], columns = ['a_amp', 'a_center', 'a_sigma', 'a_gamma', 'a_fwhm', 'a_height',\
+                                               'b_amp', 'b_center', 'b_sigma', 'b_gamma', 'b_fwhm', 'b_height',\
+                                               'g_amp', 'g_center', 'g_sigma', 'g_gamma', 'g_fwhm', 'g_height'])
+
+		balmer_parameters = np.asarray(df[self.features])
+
 		predictions = self.labels_from_parameters(balmer_parameters) # Deploy instantiated model. Defaults to random forest. 
 
 

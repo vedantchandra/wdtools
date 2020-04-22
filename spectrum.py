@@ -79,7 +79,7 @@ class SpecTools():
 	def normalize_balmer(self, wl, fl, ivar = None, lines = ['alpha', 'beta', 'gamma', 'delta'], \
 						 skylines = True, make_plot = False, make_subplot = False, make_stackedplot = False, \
 							 centroid_dict = dict(alpha = 6564.61, beta = 4862.68, gamma = 4341.68, delta = 4102.89),
-								distance_dict = dict(alpha = 250, beta = 250, gamma = 130, delta = 100)):
+								distance_dict = dict(alpha = 250, beta = 250, gamma = 130, delta = 100), sky_fill = np.nan):
 		
 		fl_normalized = [];
 		wl_normalized = [];
@@ -108,7 +108,7 @@ class SpecTools():
 			skylinemask = (wl_normalized > 5578.5 - 10)*(wl_normalized < 5578.5 + 10) + (wl_normalized > 5894.6 - 10)\
 			*(wl_normalized < 5894.6 + 10) + (wl_normalized > 6301.7 - 10)*(wl_normalized < 6301.7 + 10) + \
 			(wl_normalized > 7246.0 - 10)*(wl_normalized < 7246.0 + 10)
-			fl_normalized[skylinemask] = 1
+			fl_normalized[skylinemask] = sky_fill
 		
 		if make_plot:
 			plt.plot(wl_normalized, fl_normalized, 'k')
