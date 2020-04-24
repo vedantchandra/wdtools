@@ -12,12 +12,11 @@ plt.rcParams.update({'font.size': 18})
 path = os.path.abspath(__file__)
 dir_path = os.path.dirname(path)
 import inspect
-
-from keras.layers import Dense, Input, Conv1D, Flatten, MaxPooling1D
+from keras.layers import Dense, Input, Conv1D, Flatten, MaxPooling1D, Dropout
 from keras.models import Model
 from keras.regularizers import l2
 from keras.optimizers import Adamax
-from astroNN.nn import layers as annlayers
+#from astroNN.nn import layers as annlayers
 from sklearn.preprocessing import MinMaxScaler
 from .spectrum import SpecTools
 
@@ -62,6 +61,8 @@ class ANN:
 		self.dropout = dropout
 		self.bayesian = bayesian
 		self.scaler_isfit = False
+		self.input_bounds = np.array(input_bounds);
+		self.output_bounds = np.array(output_bounds);
 
 		if not isinstance(self.neurons,list):
 			self.neurons = np.repeat(self.neurons, self.n_hidden)
@@ -69,40 +70,6 @@ class ANN:
 		if model == 'default':
 			self.model = self.nn()
 			self.is_initialized = True
-		elif model == 'parametric_wd':
-			self.n_input = 15
-			self.n_output = 2
-			self.n_hidden = 2
-			self.neurons = [32, 32]
-			self.output_activation = 'linear'
-			self.loss = 'mse'
-			self.activation = 'relu'
-			input_scale = 'balmer'
-			output_scale = 'labels'
-			self.bayesian = True
-			
-			self.model = self.nn()
-			self.model.load_weights(dir_path+'/models/parametric32.h5')
-			print('loaded pre-trained NN that maps WD Balmer parameters -> stellar labels')
-		else:
-			print('model name unrecognized. reverting to default')
-			self.model = self.nn()
-		
-		if input_scale == 'balmer':
-			self.input_bounds = np.array([[4.89297491e-10, 2.15776372e+01],[4.39400710e+00, 6.96432697e+01],[2.09438209e-03, 4.98649086e+01],\
-			[8.20121332e+00, 9.97301468e+01],[1.03210444e-01,5.33331626e-01],[1.05808806e-08,2.38123114e+01],[4.65600272e+00,7.85555165e+01],[1.58654118e-03,4.91400753e+01],\
-			[6.63800862e+00, 9.82804576e+01],[1.39077349e-01, 5.87369186e-01],[1.41997680e-07, 3.41095035e+01],[3.66673017e+00,4.88370810e+01],[3.28315740e-04,2.69317816e+01],\
-			[6.11958791e+00, 8.07541532e+01],[7.43264533e-02, 6.14472692e-01]])
-			self.scaler_isfit = True
-		
-		else:
-			self.input_bounds = np.asarray(input_bounds)
-
-		if output_scale == 'labels':
-			self.output_bounds = np.asarray([[5000, 80000], [6.5, 9.5]])
-			self.scaler_isfit = True
-		else:
-			self.output_bounds = np.asarray(output_bounds)
 
 		self.input_scaler = MinMaxScaler()
 		self.output_scaler = MinMaxScaler()
@@ -121,10 +88,10 @@ class ANN:
 		y = Dense(self.neurons[0], activation = self.activation, kernel_regularizer = l2(self.reg), name = 'Dense_1')(x)
 		for ii in range(self.n_hidden - 1):
 			if self.bayesian:
-				y = annlayers.MCDropout(self.dropout)(y)
+				y = Dropout(self.dropout)(y, training = True)
 			y = Dense(self.neurons[ii+1], activation = self.activation, kernel_regularizer = l2(self.reg), name = 'Dense_'+str(ii+2))(y)
 		if self.bayesian:
-			y = annlayers.MCDropout(self.dropout)(y)
+			y = Dropout(self.dropout)(y, training = True)
 		out = Dense(self.n_output, activation = self.output_activation, name = 'Output')(y)
 
 		network = Model(inputs = x, outputs = out)
@@ -232,6 +199,8 @@ class CNN:
 		self.scalewarningflag = 0
 		self.scale_input = False
 		self.scale_output = False
+		self.input_scaler = MinMaxScaler()
+		self.output_scaler = MinMaxScaler()
 
 		if not isinstance(self.neurons,list):
 			self.neurons = np.repeat(self.neurons, self.n_hidden)
@@ -243,41 +212,22 @@ class CNN:
 			self.model = self.nn()
 			self.is_initialized = True
 
-
-		elif model == 'bin_class':
-			self.n_input = 4000
+		if model == 'bayesnn':
+			self.n_input = 1186
 			self.n_output = 2
 			self.n_hidden = 2
-			self.activation = 'relu'
-			self.output_activation = 'softmax'
-			self.reg = 1e-10
 			self.neurons = [32,32]
-			self.loss = 'binary_crossentropy'
-			self.dropout = 0.2
 			self.bayesian = True
+			self.output_bounds = [[2500, 100000], [5, 10]];
+			self.scale_output = True
+			self.scale_input = False
+			self.output_scaler.fit(np.asarray(self.output_bounds).T)
 			self.n_conv = 2
-			self.n_filters = [4,8]
-			self.filter_size = 8
 			self.model = self.nn()
 			self.is_initialized = True
+			self.load('bayesnn')
+			self.scalewarningflag = False
 
-
-		elif model == 'labels':
-			self.n_input = 4000
-			self.n_output = 2
-			self.n_hidden = 2
-			self.activation = 'relu'
-			self.output_activation = 'linear'
-			self.reg = 1e-10
-			self.neurons = [32,32]
-			self.loss = 'mse'
-			self.dropout = 0.1
-			self.bayesian = True
-			self.n_conv = 2
-			self.n_filters = [4,8]
-			self.filter_size = 8
-			self.model = self.nn()
-			self.is_initialized = True
 
 
 		print('### Convolutional Neural Network for Astrophysics ### \n')
@@ -296,7 +246,7 @@ class CNN:
 		y = Conv1D(self.n_filters[0], (self.filter_size), padding = 'same', activation = self.activation, kernel_regularizer = l2(self.reg), name = 'Conv_1')(x)
 		for ii in range(self.n_conv - 1):
 			if self.bayesian:
-				y = annlayers.MCDropout(self.dropout)(y)
+				y = Dropout(self.dropout)(y, training = True)
 			y = Conv1D(self.n_filters[ii+1], (self.filter_size), padding = 'same', activation = self.activation, kernel_regularizer = l2(self.reg), name = 'Conv_'+str(ii+2))(y)
 
 		y = MaxPooling1D(self.pool_size) (y)
@@ -304,11 +254,11 @@ class CNN:
 
 		for ii in range(self.n_hidden):
 			if self.bayesian:
-				y = annlayers.MCDropout(self.dropout)(y)
+				y = Dropout(self.dropout)(y, training = True)
 			y = Dense(self.neurons[ii], activation = self.activation, kernel_regularizer = l2(self.reg), name = 'Dense_'+str(ii+1))(y)
 
 		if self.bayesian:
-			y = annlayers.MCDropout(self.dropout)(y)
+			y = Dropout(self.dropout)(y, training = True)
 		
 		out = Dense(self.n_output, activation = self.output_activation, name = 'Output')(y)
 
@@ -374,6 +324,14 @@ class CNN:
 		self.scale_input = True
 		self.scale_output = True
 		return None
+
+	def save(self, modelname):
+		self.model.save_weights(dir_path + '/models/' + modelname + '.h5')
+		print('model saved!')
+
+	def load(self, modelname):
+		self.model.load_weights(dir_path + '/models/' + modelname + '.h5')
+		print('model loaded!')
 
 	def args(self):
 		print(self.__init__.__doc__)

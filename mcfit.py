@@ -78,7 +78,7 @@ class MCFit:
         return func(wl)
 
     def fit_spectrum(self, wl, fl, ivar, nwalkers = 250, burn = 100, n_draws = 250, make_plot = False, threads = 1, \
-                    plot_trace = False, init = 'unif', prior_teff = None, mleburn = 50):
+                    plot_trace = False, init = 'unif', prior_teff = None, mleburn = 50, savename = None):
 
         def lnlike(prms):
             model = self.spectrum_sampler(wl,prms[0],prms[1],prms[2])
@@ -156,15 +156,17 @@ class MCFit:
 
         lnprobs = sampler.get_log_prob(flat = True)
         medians = np.median(sampler.flatchain, 0)
-        mle = sampler.flatchain[np.argmax(lnprobs)]
+        mle = samp ler.flatchain[np.argmax(lnprobs)]
         fit_fl = self.spectrum_sampler(wl, mle[0], mle[1], mle[2])
 
         if make_plot:
             fig,ax = plt.subplots(3,3, figsize = (10,10))
             f = corner.corner(sampler.flatchain, labels = ['$T_{eff}$', '$\log{g}$', 'RV'], \
                   fig = fig, show_titles = True, title_kwargs = dict(fontsize = 16),\
-                     label_kwargs = dict(fontsize = 16), quantiles = (0.16, 0.5, 0.84))
+                     label_kwargs = dict(fontsize =  16), quantiles = (0.16, 0.5, 0.84))
             plt.tight_layout()
+            if savename is not None:
+                plt.savefig(savename + '_corner.pdf', bbox_inches = 'tight')
             plt.show()
 
             plt.figure(figsize = (8,5))
@@ -176,12 +178,14 @@ class MCFit:
                 wl_seg = wl[breakpoints[kk] + 1:breakpoints[kk+1]]
                 fl_seg = fl[breakpoints[kk] + 1:breakpoints[kk+1]]
                 fit_fl_seg = fit_fl[breakpoints[kk] + 1:breakpoints[kk+1]]
-                peak = np.argmin(fl_seg)
+                peak = np.nanargmin(fl_seg)
                 delta_wl = wl_seg - wl_seg[peak]
                 plt.plot(delta_wl, 1 + fl_seg - 0.35 * kk, 'k')
                 plt.plot(delta_wl, 1 + fit_fl_seg - 0.35 * kk, 'r')
             plt.xlabel(r'$\mathrm{\Delta \lambda}\ (\mathrm{\AA})$')
             plt.ylabel('Normalized Flux')
+            if savename is not None:
+                plt.savefig(savename + '_fit.pdf', bbox_inches = 'tight')
             plt.show()
 
             plt.figure(figsize = (10,5))
