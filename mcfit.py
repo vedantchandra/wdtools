@@ -16,7 +16,7 @@ def find_nearest(array, value):
 import os
 from PyAstronomy.pyasl import dopplerShift
 import emcee
-import scipy
+import scipys
 import corner
 from keras.models import *
 from keras.layers import *

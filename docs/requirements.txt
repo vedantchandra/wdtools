@@ -1,1 +1,7 @@
 sphinxcontrib-bibtex
+emcee
+pandas
+astropy
+keras
+corner
+pyabc
