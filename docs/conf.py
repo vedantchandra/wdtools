@@ -17,8 +17,9 @@
 
 # -- Project information -----------------------------------------------------
 import sys
+import os
 
-sys.path.insert(0, '..')
+sys.path.insert(0, os.path.abspath('./..'))
 
 project = 'wdtools'
 copyright = '2020, Vedant Chandra'
