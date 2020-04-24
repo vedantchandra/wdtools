@@ -21,6 +21,9 @@ from PyAstronomy import pyasl
 dopplerShift = pyasl.dopplerShift
 import emcee
 import corner
+import keras.models
+import keras.layers
+import keras.optimizers
 from keras.models import *
 from keras.layers import *
 from keras.optimizers import *
