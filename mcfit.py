@@ -33,7 +33,17 @@ plt.rcParams.update({'font.size': 16})
 
 class MCFit:
 
+    """ Main fitting object that can be instatiated once for a dataset. """
+
     def __init__(self, resolution = 3):
+
+        """
+        Parameters
+        ---------
+        resolution
+            float of the spectral resolution of the observed spectrum. The synthetic spectra are convolved with this Gaussian kernel before fitting. 
+        """
+
         self.H = 256
         self.reg = 0.0001
         self.lamgrid = pickle.load(open(dir_path + '/models/neural_gen/lamgrid.p', 'rb'))
@@ -42,12 +52,28 @@ class MCFit:
         self.resolution = resolution
 
     def label_sc(self, label_array):
+
+        """
+        Label scaler to transform Teff and logg to [0,1] interval based on preset bounds. 
+        Parameters
+        ---------
+        label_array
+            Unscaled array with Teff in the first column and logg in the second column
+        """
+
         teffs = label_array[:, 0];
         loggs = label_array[:, 1];
         teffs = (teffs - 2500) / (100000 - 2500)
         loggs = (loggs - 5) / (10 - 5)
         return np.vstack((teffs, loggs)).T
     def inv_label_sc(self, label_array):
+        """
+        Inverse label scaler to transform Teff and logg from [0,1] to original scale based on preset bounds. 
+        Parameters
+        ---------
+        label_array
+            Scaled array with Teff in the first column and logg in the second column
+        """
         teffs = label_array[:, 0];
         loggs = label_array[:, 1];
         teffs = (teffs * (100000 - 2500)) + 2500
@@ -55,6 +81,9 @@ class MCFit:
         return np.vstack((teffs, loggs)).T
 
     def generator(self):
+        """
+        Base 2-layer neural network to generate synthetic spectra.  
+        """
         x = Input(shape=(2,))
         y = Dense(self.H,activation='relu',trainable = True)(x)
         y = Dense(self.H,activation='relu',trainable = True)(y)
@@ -66,6 +95,25 @@ class MCFit:
         return model
 
     def spectrum_sampler(self, wl, teff, logg, rv):
+        """
+        Wrapper function that talks to the generative neural network in scaled units, and also performs the Gaussian convolution to instrument resolution. 
+        
+        Parameters
+        ----------
+        wl : array
+            Array of spectral wavelengths on which to generate the synthetic spectrum
+        teff : float
+            Effective surface temperature of sampled spectrum
+        logg : float
+            log surface gravity of sampled spectrum (cgs)
+        rv : float
+            radial velocity (redshift) of sampled spectrum in km/s
+
+        Returns
+        -------
+            array
+                Synthetic spectrum with desired parameters, interpolated onto the supplied wavelength grid. 
+        """
         label = self.label_sc(np.asarray(np.stack((teff,logg)).reshape(1,-1)))
         synth = dopplerShift(self.lamgrid,np.ravel(
                         (
@@ -79,6 +127,52 @@ class MCFit:
 
     def fit_spectrum(self, wl, fl, ivar, nwalkers = 250, burn = 100, n_draws = 250, make_plot = False, threads = 1, \
                     plot_trace = False, init = 'unif', prior_teff = None, mleburn = 50, savename = None):
+
+        """
+        Main fitting routine, takes a continuum-normalized spectrum and fits it with MCMC to recover steller labels. 
+        
+        Parameters
+        ----------
+        wl : array
+            Array of observed spectral wavelengths
+        fl : array
+            Array of observed spectral fluxes
+        ivar : array
+            Array of observed inverse-variance for uncertainty estimation. If a full inverse variance matrix is not available, estimate a constant inverse variance with
+            the signal-to-noise ratio of the spectrum and pass that as an array. This is required to define the chi^2 likelihood.
+        init : str, optional
+            If 'unif', walkers are initialized uniformly in parameter space before the burn-in phase. If 'mle', there is a pre-burn phase with walkers initialized uniformly in 
+            parameter space. The highest probability (lowest chi square) parameter set is taken as the MLE, and the main burn-in is initialized in a tight n-ball around this high
+            probablity region. If 'opt', the MLE is estimated in one shot using Nelder-Mead optimization and the burn-in is initialized in a tight n-ball around that value. Direct
+            optimization is susceptible to local minima and starting conditions. We recommend first using 'unif' to identify any multi-modality, and then 'mle' for the final fit.
+        prior_teff : tuple, optional
+            Tuple of (mean, sigma) to define a Gaussian prior on the effective temperature parameter. This is especially useful if there is strong prior knowledge of temperature 
+            from photometry. If not provided, a flat prior is used.
+        nwalkers : int, optional
+            Number of independent MCMC 'walkers' that will explore the parameter space
+        burn : int, optional
+            Number of steps to run and discard at the start of sampling to 'burn-in' the posterior parameter distribution. If intitializing from 
+            a high-probability point, keep this value high to avoid under-estimating uncertainties. 
+        n_draws : int, optional
+            Number of 'production' steps after the burn-in. The final number of posterior samples will be nwalkers * n_draws. 
+        mleburn : int, optional
+            Number of steps for the pre-burn phase to estimate the MLE. 
+        threads : int, optional
+            Number of threads for distributed sampling. 
+        make_plot: bool, optional
+            If True, produces a plot of the best-fit synthetic spectrum over the observed spectrum, as well as a corner plot of the fitted parameters. 
+        plot_trace: bool, optiomal
+            If True, plots the trace of posterior samples of each parameter for the production steps. Can be used to visually determine the quality of mixing of
+            the chains, and ascertain if a longer burn-in is required. 
+        savename: str, optional
+            If provided, the corner plot and best-fit plot will be saved as PDFs. 
+
+
+        Returns
+        -------
+            sampler
+                emcee sampler object, from which posterior samples can be obtained using sampler.flatchain. 
+        """
 
         def lnlike(prms):
             model = self.spectrum_sampler(wl,prms[0],prms[1],prms[2])
@@ -156,7 +250,7 @@ class MCFit:
 
         lnprobs = sampler.get_log_prob(flat = True)
         medians = np.median(sampler.flatchain, 0)
-        mle = samp ler.flatchain[np.argmax(lnprobs)]
+        mle = sampler.flatchain[np.argmax(lnprobs)]
         fit_fl = self.spectrum_sampler(wl, mle[0], mle[1], mle[2])
 
         if make_plot:
@@ -196,6 +290,38 @@ class MCFit:
 
 
     def fit_spectrum_abc(self, wl, fl, ivar = None, make_plot = False, popsize = 100, max_pops = 25):
+
+        """
+        Alternative fitting routine that employs Approximate Bayesian Computation (ABC) to recover posterior parameters. In this framework,
+        the chi^2 is treated like a 'distance' rather than a formal likelihood. This is especially well-suited to situations where the chi^2 assumptions
+        are not held, or when the spectral variance mask is not defined. 
+        
+        Parameters
+        ----------
+        wl : array
+            Array of observed spectral wavelengths
+        fl : array
+            Array of observed spectral fluxes
+        ivar : array, optional
+            Array of observed inverse-variance for uncertainty estimation. If a full inverse variance matrix is not available, simply leave this as None. 
+        popsize : int, optional
+            Number of particles used in the ABC algorithm. 
+        max_pops: int, optional
+            Number of steps after which ABC sampling is concluded. It is generally safer to leave this large and manually end sampling when the epsilon
+            distances bottom out and stop decreasing. 
+        make_plot: bool, optional
+            If True, produces a plot of the best-fit synthetic spectrum over the observed spectrum, as well as a KDE corner plot of the fitted parameters. 
+
+
+        Returns
+        -------
+            history
+                pyabc history object, from which posterior samples can be obtained using history.get_distribution(), which returns a dataframe of posterior samples along 
+                with their respective weights.  
+        """
+
+
+
         if ivar is None:
             ivar = 1
 
