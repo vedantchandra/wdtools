@@ -11,12 +11,14 @@ Table = table.Table
 import sys
 from tqdm import tqdm
 from scipy import interpolate
+interp1d = interpolate.interp1d
 def find_nearest(array, value):
     array = np.asarray(array)
     idx = (np.abs(array - value)).argmin()
     return idx
 import os
-from PyAstronomy.pyasl import dopplerShift
+from PyAstronomy import pyasl
+dopplerShift = pyasl.dopplerShift
 import emcee
 import corner
 from keras.models import *
