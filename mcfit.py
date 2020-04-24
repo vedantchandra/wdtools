@@ -6,10 +6,11 @@ from scipy import stats
 import pandas as pd
 import glob
 import pickle
-from astropy.table import Table
+from astropy import table 
+Table = table.Table
 import sys
 from tqdm import tqdm
-from scipy.interpolate import interp1d
+from scipy import interpolate
 def find_nearest(array, value):
     array = np.asarray(array)
     idx = (np.abs(array - value)).argmin()
@@ -17,7 +18,6 @@ def find_nearest(array, value):
 import os
 from PyAstronomy.pyasl import dopplerShift
 import emcee
-import scipy
 import corner
 from keras.models import *
 from keras.layers import *
