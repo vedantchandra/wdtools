@@ -2,7 +2,7 @@ import numpy as np
 import astropy
 import scipy
 import matplotlib.pyplot as plt
-import scipy.stats as stats
+from scipy import stats
 import pandas as pd
 import glob
 import pickle
@@ -22,7 +22,7 @@ import corner
 from keras.models import *
 from keras.layers import *
 from keras.optimizers import *
-import scipy.optimize as opt
+from scipy import optimize as opt
 import pyabc
 halpha = 6564.61
 hbeta = 4862.68
