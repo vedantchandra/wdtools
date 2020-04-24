@@ -4,7 +4,6 @@ sphinx:
     configuration: docs/conf.py
 
 python:
-    setup_py_install: true
     version: 3.6
     install:
       - requirements: docs/requirements.txt
