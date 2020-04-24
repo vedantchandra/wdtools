@@ -21,12 +21,7 @@ from PyAstronomy import pyasl
 dopplerShift = pyasl.dopplerShift
 import emcee
 import corner
-import keras.models
-import keras.layers
-import keras.optimizers
-from keras.models import *
-from keras.layers import *
-from keras.optimizers import *
+import keras
 from scipy import optimize as opt
 import pyabc
 halpha = 6564.61
@@ -90,13 +85,13 @@ class MCFit:
         """
         Base 2-layer neural network to generate synthetic spectra.  
         """
-        x = Input(shape=(2,))
-        y = Dense(self.H,activation='relu',trainable = True)(x)
-        y = Dense(self.H,activation='relu',trainable = True)(y)
-        out = Dense(len(self.lamgrid),activation='linear',trainable = True)(y)
+        x = keras.layers.Input(shape=(2,))
+        y = keras.layers.Dense(self.H,activation='relu',trainable = True)(x)
+        y = keras.layers.Dense(self.H,activation='relu',trainable = True)(y)
+        out = keras.layers.Dense(len(self.lamgrid),activation='linear',trainable = True)(y)
         
-        model = Model(inputs = x, outputs = out)
-        model.compile(optimizer = Adamax(), loss = 'mse', \
+        model = keras.models.Model(inputs = x, outputs = out)
+        model.compile(optimizer = keras.optimizers.Adamax(), loss = 'mse', \
                       metrics = ['mae'])
         return model
 
