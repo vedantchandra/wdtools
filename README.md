@@ -14,15 +14,15 @@ spectools = SpecTools()
 wl_norm, fl_norm = spectools.normalize_balmer(wl, fl)
 ```
 
-## mcfit.py
+## gfp.py
 
-Fitting tool that uses theoretical synthetic spectra to infer temperature and surface gravity from spectroscopic observations of hydrogen-rich white dwarfs. The synthetic spectra are generated with a pre-trained neural network that interpolates the theoretical models of D. Koester (2010, reference below). The fitting procedure uses Markov-Chain Monte Carlo sampling to derive the posterior parameter distributions from the observed spectrum. 
+Generative fitting pipeline - uses theoretical synthetic spectra to infer temperature and surface gravity from spectroscopic observations of hydrogen-rich white dwarfs. The synthetic spectra are generated with a pre-trained neural network that interpolates the theoretical models of D. Koester (2010, reference below). The fitting procedure uses Markov-Chain Monte Carlo sampling to derive the posterior parameter distributions from the observed spectrum. `specclass` can be either 'DA' or 'DB' to select which atmospheric model to use. 
 
 ```python
-from wdtools.mcfit import MCFit
-mcfit = MCFit(resolution = 3)
+from wdtools.gfp import GFP
+gfp = GFP(resolution = 3, specclass = 'DA')
 
-sampler = mcfit.fit_spectrum(wl_norm, fl_norm, ivar_norm, prior_teff = None, make_plot = True)
+sampler = gfp.fit_spectrum(wl_norm, fl_norm, ivar_norm, prior_teff = None, make_plot = True)
 ```
 
 `fit_spectrum` returns an `emcee` sampler object. In the above example, `sampler.flatchain` returns an array with posterior samples of effective temperature, log surface gravity, and radial velocity, which can then be described with statistics like the median and interquartile range.
@@ -62,12 +62,12 @@ The `wd_bayesnn` neural network is pre-trained on 5000 SDSS white dwarfs with la
 
 If using the pre-trained generative neural network for white dwarf model atmospheres, kindly cite the original paper that describes these models: 
 
-Koester 2010 [[ADS](https://ui.adsabs.harvard.edu/abs/2010MmSAI..81..921K/abstract)]
+Koester (2010) [[ADS](https://ui.adsabs.harvard.edu/abs/2010MmSAI..81..921K/abstract)]
 
 These models also incorporate physics from the following papers (this list is not exhaustive):
 
-Fontaine 2001 [[ADS](https://ui.adsabs.harvard.edu/abs/2001PASP..113..409F/abstract)]
+Fontaine (2001) [[ADS](https://ui.adsabs.harvard.edu/abs/2001PASP..113..409F/abstract)]
 
-Tremblay & Bergeron 2009 [[ADS](https://ui.adsabs.harvard.edu/abs/2009ApJ...696.1755T/abstract)]
+Tremblay & Bergeron (2009) [[ADS](https://ui.adsabs.harvard.edu/abs/2009ApJ...696.1755T/abstract)]
 
-Tassoul et al. 1990 [[ADS](https://ui.adsabs.harvard.edu/abs/1990ApJS...72..335T/abstract)]
+Tassoul et al. (1990) [[ADS](https://ui.adsabs.harvard.edu/abs/1990ApJS...72..335T/abstract)]
