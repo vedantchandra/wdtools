@@ -19,19 +19,14 @@ class LineProfiles:
 	'''
 	General class to fit Voigt profiles to the first 3 Balmer absorption lines, and then infer stellar labels.
 	Uses a 25-tree random forest model by default, trained on 5326 spectra from the Sloan Digital Sky Survey. 
-	Probabilistic prediction uses 100 boostrapped random forest models with 10 trees each, also SDSS-trained. 
+	Probabilistic prediction uses 100 boostrapped random forest models with 25 trees each. 
 	Ground truth labels are taken from Tremblay et al. (2019)
 	Line profiles are fit using the LMFIT package via chi^2 minimization. 
 
-	TODO:
-
-	write radial velocity fitter based on Barstow (repeated fits etc.)
-
-	To get started, use LineProfiles.infer_labels(wavelength, flux)
-	For more details, run help(LineProfiles)
+	To get started, use lineprofiles.labels_from_spectrum(wavelength, flux).
 	'''
 
-	def __init__(self, verbose = False, plot_profiles = False, modelname = 'bootstrap', n_trees = 25, n_bootstrap = 25):
+	def __init__(self, verbose = False, plot_profiles = False, n_trees = 25, n_bootstrap = 25):
 
 		self.verbose = verbose
 		self.optimizer = 'lm'
@@ -48,14 +43,8 @@ class LineProfiles:
                                     'b_amp', 'b_fwhm', 'b_height',
                                     'g_amp', 'g_fwhm', 'g_height']
 
-		print('### Line Profiles Tool for White Dwarf Spectra ### \n')
-		print('Verbose: '+str(verbose)+', plot_profiles: '+str(plot_profiles))
-		print(LineProfiles.__doc__)
 
-		if self.modelname == 'rf':
-			self.model = RandomForestRegressor(n_estimators = self.n_trees)
-		elif self.modelname == 'bootstrap':
-			self.bootstrap_models = [];
+		self.bootstrap_models = [];
 
 		self.load('all')
 

@@ -44,6 +44,22 @@ class SpecTools():
 		self.params['l_intercept'].set(value = 25)
 		self.params['l_slope'].set(value = 0)
 
+
+	def continuum_normalize(self, wl, fl, n_iter = 2, threshold = 0.95):
+	    linemask = np.repeat(True, len(fl))
+	    for kk in range(n_iter):
+	        if kk == 0:
+	            p = poly.polyfit(wl[linemask], fl[linemask], 5)
+	            norm = fl/poly.polyval(wl, p)
+	        else:
+	            p = poly.polyfit(wl[linemask], norm[linemask], 1)
+	            norm = norm/poly.polyval(wl, p)
+	        linemask = (norm > threshold)
+	#         plt.figure()
+	#         plt.plot(wl, fl)
+	#         plt.plot(wl[linemask], fl[linemask])
+	    return wl, norm
+
 	def normalize_line(self, wl, fl, ivar, centroid, distance, make_plot = False):
 
 		self.params['v_center'].set(value = centroid)
@@ -79,15 +95,15 @@ class SpecTools():
 	def normalize_balmer(self, wl, fl, ivar = None, lines = ['alpha', 'beta', 'gamma', 'delta'], \
 						 skylines = True, make_plot = False, make_subplot = False, make_stackedplot = False, \
 							 centroid_dict = dict(alpha = 6564.61, beta = 4862.68, gamma = 4341.68, delta = 4102.89),
-								distance_dict = dict(alpha = 250, beta = 250, gamma = 130, delta = 100), sky_fill = np.nan):
+								distance_dict = dict(alpha = 350, beta = 300, gamma = 130, delta = 100), sky_fill = np.nan):
 		
 		fl_normalized = [];
 		wl_normalized = [];
 		ivar_normalized = [];
 		ct = 0;
 		
-		centroid_dict = dict(alpha = 6564.61, beta = 4862.68, gamma = 4341.68, delta = 4102.89)
-		distance_dict = dict(alpha = 300, beta = 200, gamma = 120, delta = 90)
+		centroid_dict = dict(alpha = 6564.61, beta = 4862.68, gamma = 4341.68, delta = 4102.89, eps = 3971.20, h8 = 3890.12, h9 = 3836.44, h10 = 3798.4, h11 = 3771.67, h12 = 2751.19)
+		distance_dict = dict(alpha = 300, beta = 200, gamma = 120, delta = 75, eps = 50, h8 = 25, h9 = 15, h10 = 15, h11 = 15, h12 = 10)
 		
 		
 		for line in lines:
@@ -151,11 +167,6 @@ class SpecTools():
 		interpflux = func(target_wl)[1]
 		return target_wl,interpflux
 
-class RVTools():
-
-	def __init__(self):
-		pass
-
 	def linear(self, wl, p1, p2):
 
 		''' Linear polynomial of degree 1 '''
@@ -179,8 +190,6 @@ class RVTools():
 		in2 = bisect_left(wl,centroid+60)
 		cropped_wl = wl[in1:in2]
 		cflux = flux[in1:in2]
-
-	#     plt.plot(cropped_wl, cflux)
 		
 		cmask = (cropped_wl < centroid - 50)+(cropped_wl > centroid + 50)
 

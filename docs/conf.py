@@ -21,12 +21,6 @@ import os
 
 sys.path.insert(0, os.path.abspath('./..'))
 
-import mock
-
-MOCK_MODULES = ['numpy', 'scipy', 'sklearn', 'matplotlib', 'matplotlib.pyplot', 'scipy.interpolate', 'scipy.special', 'math', '__future__', 'toolboxutilities',
-				'pyabc', 'pandas', 'corner', 'keras', 'emcee', 'astropy', 'PyAstronomy', 'tqdm']
-for mod_name in MOCK_MODULES:
-    sys.modules[mod_name] = mock.Mock()
 
 project = 'wdtools'
 copyright = '2020, Vedant Chandra'
