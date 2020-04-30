@@ -61,7 +61,7 @@ class GFP:
             self.resolution = resolution * pix_per_a
 
         elif self.specclass == 'DB':
-            self.H = 64
+            self.H = 128
             self.lamgrid = pickle.load(open(dir_path + '/models/neural_gen/DB_lamgrid.p', 'rb'))
             self.model = self.generator(self.H, len(self.lamgrid))
             self.model.load_weights(dir_path + '/models/neural_gen/DB_normNN.h5')
