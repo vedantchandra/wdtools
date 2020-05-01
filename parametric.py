@@ -37,15 +37,14 @@ class LineProfiles:
 		self.plot_profiles = plot_profiles
 		self.n_trees = n_trees
 		self.n_bootstrap = n_bootstrap
-		self.modelname = modelname
 		self.linedict = dict(alpha = self.halpha, beta = self.hbeta, gamma = self.hgamma)
-		self.features = features = ['a_amp', 'a_fwhm', 'a_height',
+		self.features = ['a_amp', 'a_fwhm', 'a_height',
                                     'b_amp', 'b_fwhm', 'b_height',
                                     'g_amp', 'g_fwhm', 'g_height']
 
 
+		self.modelname = 'bootstrap'
 		self.bootstrap_models = [];
-
 		self.load('all')
 
 
