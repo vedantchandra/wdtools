@@ -118,7 +118,7 @@ class GFP:
                       metrics = ['mae'])
         return model
 
-    def spectrum_sampler(self, wl, teff, logg, rv):
+    def synth_spectrum_sampler(self, wl, teff, logg, rv):
         """
         Wrapper function that talks to the generative neural network in scaled units, and also performs the Gaussian convolution to instrument resolution. 
         
@@ -145,12 +145,17 @@ class GFP:
                         ), rv
                     )[0]
         synth =  (np.ravel(synth).astype('float64'))
+
+        return synth
+
+    def spectrum_sampler(self, wl, teff, logg, rv):
+        synth = self.synth_spectrum_sampler(self.lamgrid, teff, logg, rv)
         synth = scipy.ndimage.gaussian_filter1d(synth, self.resolution)
         func = interp1d(self.lamgrid, synth, fill_value = np.nan, bounds_error = False)
         return func(wl)
 
     def fit_spectrum(self, wl, fl, ivar, nwalkers = 250, burn = 100, n_draws = 250, make_plot = False, threads = 1, \
-                    plot_trace = False, init = 'unif', prior_teff = None, mleburn = 50, specclass = 'DA', savename = None):
+                    plot_trace = False, init = 'unif', prior_teff = None, mleburn = 50, savename = None):
 
         """
         Main fitting routine, takes a continuum-normalized spectrum and fits it with MCMC to recover steller labels. 
@@ -284,7 +289,7 @@ class GFP:
         lnprobs = sampler.get_log_prob(flat = True)
         medians = np.median(sampler.flatchain, 0)
         mle = sampler.flatchain[np.argmax(lnprobs)]
-        fit_fl = self.spectrum_sampler(wl, mle[0], mle[1], mle[2])
+        fit_fl = self.spectrum_sampler(wl, *mle)
 
         if make_plot:
             fig,ax = plt.subplots(3,3, figsize = (10,10))
@@ -415,3 +420,9 @@ class GFP:
             plt.show()
 
         return history
+
+    def blackbody(self, wl, teff):
+        wl = wl * 1e-10
+        num = 2 * planck_h * speed_light**2
+        denom = wl**5 * (np.exp((planck_h * speed_light) / (wl * k_B * teff)) - 1)
+        return num/denom

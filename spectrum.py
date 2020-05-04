@@ -70,7 +70,7 @@ class SpecTools():
 		cropped_wl = wl[crop1:crop2]
 		cropped_fl = fl[crop1:crop2]
 		
-		res = self.cm.fit(cropped_fl, self.params, x = cropped_wl)
+		res = self.cm.fit(cropped_fl, self.params, x = cropped_wl, nan_policy = 'omit')
 		slope = res.params['l_slope']
 		intercept = res.params['l_intercept']
 		
