@@ -28,6 +28,6 @@ The returned `sampler` object is an emcee sampler instance, from which posterior
 API
 ###
 
-.. automodule:: gfp
+.. autoclass:: wdtools.GFP
    :special-members:
    :members:

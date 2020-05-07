@@ -23,15 +23,21 @@ import corner
 import keras
 from scipy import optimize as opt
 import pyabc
-from bisect import bisect_left
+import bisect.bisect_left as bisect_left
 import warnings
 halpha = 6564.61
 hbeta = 4862.68
 hgamma = 4341.68
 hdelta = 4102.89
+planck_h = 6.62607004e-34
+speed_light = 299792458
+k_B = 1.38064852e-23
 path = os.path.abspath(__file__)
 dir_path = os.path.dirname(path)
 plt.rcParams.update({'font.size': 16})
+
+
+from .spectrum import SpecTools
 
 class GFP:
 
@@ -50,23 +56,36 @@ class GFP:
         '''
 
 
-        self.specclass = specclass
+        self.res_ang = resolution
+        self.resolution = {};
 
-        if self.specclass == 'DA':
-            self.H = 256
-            self.lamgrid = pickle.load(open(dir_path + '/models/neural_gen/lamgrid.p', 'rb'))
-            self.model = self.generator(self.H, len(self.lamgrid))
-            self.model.load_weights(dir_path + '/models/neural_gen/wide_normNN.h5')
-            pix_per_a = len(self.lamgrid) / (self.lamgrid[-1] - self.lamgrid[0])
-            self.resolution = resolution * pix_per_a
+        self.H_DA = 256
+        self.lamgrid_DA = pickle.load(open(dir_path + '/models/neural_gen/lamgrid.p', 'rb'))
+        self.model_DA = self.generator(self.H_DA, len(self.lamgrid_DA))
+        self.model_DA.load_weights(dir_path + '/models/neural_gen/wide_normNN.h5')
+        pix_per_a = len(self.lamgrid_DA) / (self.lamgrid_DA[-1] - self.lamgrid_DA[0])
+        self.resolution['DA'] = resolution * pix_per_a
 
-        elif self.specclass == 'DB':
-            self.H = 128
-            self.lamgrid = pickle.load(open(dir_path + '/models/neural_gen/DB_lamgrid.p', 'rb'))
-            self.model = self.generator(self.H, len(self.lamgrid))
-            self.model.load_weights(dir_path + '/models/neural_gen/DB_normNN.h5')
-            pix_per_a = len(self.lamgrid) / (self.lamgrid[-1] - self.lamgrid[0])
-            self.resolution = resolution * pix_per_a
+        self.H_DB = 256
+        self.lamgrid_DB = pickle.load(open(dir_path + '/models/neural_gen/DB_lamgrid.p', 'rb'))
+        self.model_DB = self.generator(self.H_DB, len(self.lamgrid_DB))
+        self.model_DB.load_weights(dir_path + '/models/neural_gen/DB_normNN.h5')
+        pix_per_a = len(self.lamgrid_DB) / (self.lamgrid_DB[-1] - self.lamgrid_DB[0])
+        self.resolution['DB'] = resolution * pix_per_a
+
+        self.model = {'DA': self.model_DA, 'DB': self.model_DB}
+        self.lamgrid = {'DA': self.lamgrid_DA, 'DB': self.lamgrid_DB}
+
+        if '+' not in specclass:
+            self.isbinary = False;
+            self.specclass = specclass;
+        elif '+' in specclass:
+            classes = specclass.split('+')
+            self.specclass = [classes[0], classes[1]]
+            self.isbinary = True
+        
+        self.sp = SpecTools()
+
 
     def label_sc(self, label_array):
 
@@ -77,12 +96,12 @@ class GFP:
         label_array
             Unscaled array with Teff in the first column and logg in the second column
         """
-
         teffs = label_array[:, 0];
         loggs = label_array[:, 1];
         teffs = (teffs - 2500) / (100000 - 2500)
         loggs = (loggs - 5) / (10 - 5)
         return np.vstack((teffs, loggs)).T
+
     def inv_label_sc(self, label_array):
         """
         Inverse label scaler to transform Teff and logg from [0,1] to original scale based on preset bounds. 
@@ -118,7 +137,7 @@ class GFP:
                       metrics = ['mae'])
         return model
 
-    def synth_spectrum_sampler(self, wl, teff, logg, rv):
+    def synth_spectrum_sampler(self, wl, teff, logg, rv, specclass = None):
         """
         Wrapper function that talks to the generative neural network in scaled units, and also performs the Gaussian convolution to instrument resolution. 
         
@@ -138,24 +157,69 @@ class GFP:
             array
                 Synthetic spectrum with desired parameters, interpolated onto the supplied wavelength grid. 
         """
+
+        if specclass is None:
+            specclass = self.specclass;
+
         label = self.label_sc(np.asarray(np.stack((teff,logg)).reshape(1,-1)))
-        synth = pyasl.dopplerShift(self.lamgrid,np.ravel(
+        synth = pyasl.dopplerShift(self.lamgrid[specclass],np.ravel(
                         (
-                                self.model.predict(label))[0]
+                                self.model[specclass].predict(label))[0]
                         ), rv
                     )[0]
         synth =  (np.ravel(synth).astype('float64'))
 
         return synth
 
-    def spectrum_sampler(self, wl, teff, logg, rv):
-        synth = self.synth_spectrum_sampler(self.lamgrid, teff, logg, rv)
-        synth = scipy.ndimage.gaussian_filter1d(synth, self.resolution)
-        func = interp1d(self.lamgrid, synth, fill_value = np.nan, bounds_error = False)
+    def spectrum_sampler(self, wl, teff, logg, rv, specclass = None):
+        if specclass is None:
+            specclass = self.specclass;
+        synth = self.synth_spectrum_sampler(self.lamgrid[specclass], teff, logg, rv, specclass)
+        synth = scipy.ndimage.gaussian_filter1d(synth, self.resolution[specclass])
+        func = interp1d(self.lamgrid[specclass], synth, fill_value = np.nan, bounds_error = False)
         return func(wl)
 
-    def fit_spectrum(self, wl, fl, ivar, nwalkers = 250, burn = 100, n_draws = 250, make_plot = False, threads = 1, \
-                    plot_trace = False, init = 'unif', prior_teff = None, mleburn = 50, savename = None):
+    def binary_sampler(self, wl, teff_1, logg_1, rv_1, teff_2, logg_2, rv_2, lf = 1, specclass = None):
+
+        if specclass is None:
+            specclass = self.specclass;
+
+        if isinstance(specclass,str):
+            specclass = [specclass, specclass]
+
+        bin_lamgrid = np.linspace(3500, 7000, 15000)
+
+        normfl_1 = self.synth_spectrum_sampler(self.lamgrid[specclass[0]], teff_1, logg_1, rv_1, specclass[0])
+        func1 = interp1d(self.lamgrid[specclass[0]], normfl_1, fill_value = 1, bounds_error = False)
+        normfl_1 = func1(bin_lamgrid)
+
+        normfl_2 = self.synth_spectrum_sampler(self.lamgrid[specclass[1]], teff_2, logg_2, rv_2, specclass[1])
+        func2 = interp1d(self.lamgrid[specclass[1]], normfl_2, fill_value = 1, bounds_error = False)
+        normfl_2 = func2(bin_lamgrid)
+
+        continuum_1 = self.blackbody(bin_lamgrid, teff_1) * 1e-14
+        continuum_2 = self.blackbody(bin_lamgrid, teff_2) * 1e-14
+
+        fullspec_1 = normfl_1 * continuum_1 
+        fullspec_2 = normfl_2 * continuum_2
+
+        summed_spectrum = (fullspec_1 + lf * fullspec_2) # FL RATIO
+
+        # _,finalspec = self.sp.normalize_balmer(self.lamgrid[specclass], summed_spectrum,
+        #                     lines = ['alpha', 'beta', 'gamma', 'delta', 'eps','h8'],
+        #                                  skylines = False, make_subplot = False)
+
+        bin_lamgrid, finalspec = self.sp.continuum_normalize(bin_lamgrid, summed_spectrum)
+        
+        resolution = self.res_ang * (bin_lamgrid[1] - bin_lamgrid[0])
+
+        synth = scipy.ndimage.gaussian_filter1d(finalspec, resolution)
+        func = interp1d(bin_lamgrid, synth, fill_value = np.nan, bounds_error = False)
+        
+        return func(wl)
+
+    def fit_spectrum(self, wl, fl, ivar, nwalkers = 50, burn = 100, n_draws = 50, make_plot = True, threads = 1, \
+                    plot_trace = False, init = 'unif', prior_teff = None, mleburn = 50, savename = None, isbinary = None, mask_threshold = 100):
 
         """
         Main fitting routine, takes a continuum-normalized spectrum and fits it with MCMC to recover steller labels. 
@@ -205,31 +269,51 @@ class GFP:
                 emcee `sampler` object, from which posterior samples can be obtained using `sampler.flatchain`. 
         """
 
+        if isbinary is None:
+            isbinary == self.isbinary
+
         if ivar == 'infer':
             _=warnings.warn('inferring ivar using beta-sigma method. the chi-square likelihood may not be exact, treat returned uncertainties with caution!', Warning)
             beq = pyasl.BSEqSamp()
             std, _ = beq.betaSigma(fl, 1, 1)
             ivar = np.repeat(1 / std**2, len(fl))
-            print(ivar)
 
-        def lnlike(prms):
-            model = self.spectrum_sampler(wl,prms[0],prms[1],prms[2])
+        prior_lows = [6500, 6.6, -1000, 6500, 6.6, -1000, 0]
 
-            nonan = (~np.isnan(model)) * (~np.isnan(fl)) * (~np.isnan(ivar))
-            diff = model[nonan] - fl[nonan]
-            chisq = np.sum(diff**2 * ivar[nonan])
-            if np.isnan(chisq):
-                return -np.Inf
-            lnlike = -0.5 * chisq
-            return lnlike
+        prior_highs = [40000, 9.4, 1000, 40000, 9.4, 1000, 1]
+
+        if not isbinary:
+
+            def lnlike(prms):
+
+                model = self.spectrum_sampler(wl,*prms)
+
+                nonan = (~np.isnan(model)) * (~np.isnan(fl)) * (~np.isnan(ivar))
+                diff = model[nonan] - fl[nonan]
+                chisq = np.sum(diff**2 * ivar[nonan])
+                if np.isnan(chisq):
+                    return -np.Inf
+                lnlike = -0.5 * chisq
+                return lnlike
+
+        elif isbinary:
+            def lnlike(prms):
+
+                model = self.binary_sampler(wl,*prms)
+
+                nonan = (~np.isnan(model)) * (~np.isnan(fl)) * (~np.isnan(ivar))
+                diff = model[nonan] - fl[nonan]
+                chisq = np.sum(diff**2 * ivar[nonan])
+                if np.isnan(chisq):
+                    return -np.Inf
+                lnlike = -0.5 * chisq
+                return lnlike
 
         def lnprior(prms):
-            if prms[0] < 6000 or prms[0] > 40000:
-                return -np.Inf
-            elif prms[1] < 6.5 or prms[1] > 9.5:
-                return -np.Inf
-            elif prms[2] < -500 or prms[2] > 500:
-                return -np.Inf
+            for jj in range(len(prms)):
+                if prms[jj] < prior_lows[jj] or prms[jj] > prior_highs[jj]:
+                    return -np.Inf
+
             if prior_teff is not None:
                 mu,sigma = prior_teff
                 return np.log(1.0/(np.sqrt(2*np.pi)*sigma))-0.5*(prms[0]-mu)**2/sigma**2
@@ -241,27 +325,34 @@ class GFP:
             if not np.isfinite(lp):
                 return -np.Inf
             return lp + lnlike(prms)
-        ndim = 3
-        pos0 = np.zeros((nwalkers,ndim))
 
-        lows = [6500,6.6,-300]
-        highs = [80000,9.4,300]
+        if isbinary:
+            ndim = 7
+            init_prms = [12000, 8, 0, 12000, 8, 0, 1]
+            param_names = ['$T_{eff, 1}$', '$\log{g}_1$', '$RV_1$', '$T_{eff, 2}$', '$\log{g}_2$', '$RV_2$', '$f_{2,1}$']
+        elif not isbinary:
+            ndim = 3
+            init_prms = [12000, 8, 0]
+            param_names = ['$T_{eff}$', '$\log{g}$', '$RV$']
+
+        pos0 = np.zeros((nwalkers,ndim))
 
         sampler = emcee.EnsembleSampler(nwalkers,ndim,lnprob,threads = threads)
 
         if init == 'opt':
+            print('finding optimal starting point...')
             nll = lambda *args: -lnprob(*args)
-            result = opt.minimize(nll, [12000, 8, 0], method = 'Nelder-Mead')
+            result = opt.minimize(nll, init_prms, method = 'Nelder-Mead')
 
             for jj in range(ndim):
                 pos0[:,jj] = (result.x[jj] + 0.001*np.random.normal(size = nwalkers))
 
         elif init == 'unif':
             for jj in range(ndim):
-                pos0[:,jj] = np.random.uniform(lows[jj], highs[jj], nwalkers)
+                pos0[:,jj] = np.random.uniform(prior_lows[jj], prior_highs[jj], nwalkers)
         elif init == 'mle':
             for jj in range(ndim):
-                pos0[:,jj] = np.random.uniform(lows[jj], highs[jj], nwalkers)
+                pos0[:,jj] = np.random.uniform(prior_lows[jj], prior_highs[jj], nwalkers)
 
             b = sampler.run_mcmc(pos0, mleburn, progress = True)
             lnprobs = sampler.get_log_prob(flat = True)
@@ -281,20 +372,26 @@ class GFP:
         b = sampler.run_mcmc(b.coords, n_draws, progress = True)
 
         if plot_trace:
-            f, axs = plt.subplots(3, 1, figsize = (10, 6))
+            f, axs = plt.subplots(ndim, 1, figsize = (10, 6))
             for jj in range(ndim):
                 axs[jj].plot(sampler.chain[:,:,jj].T, alpha = 0.3, color = 'k');
+                plt.ylabel(param_names[jj])
+            plt.xlabel('steps')
             plt.show()
 
         lnprobs = sampler.get_log_prob(flat = True)
         medians = np.median(sampler.flatchain, 0)
         mle = sampler.flatchain[np.argmax(lnprobs)]
-        fit_fl = self.spectrum_sampler(wl, *mle)
+
+        if isbinary:
+            fit_fl = self.binary_sampler(wl, *mle)
+        elif not isbinary:
+            fit_fl = self.spectrum_sampler(wl, *mle)
 
         if make_plot:
-            fig,ax = plt.subplots(3,3, figsize = (10,10))
-            f = corner.corner(sampler.flatchain, labels = ['$T_{eff}$', '$\log{g}$', 'RV'], \
-                  fig = fig, show_titles = True, title_kwargs = dict(fontsize = 16),\
+            #fig,ax = plt.subplots(ndim, ndim, figsize = (15,15))
+            f = corner.corner(sampler.flatchain, labels = param_names, \
+                  show_titles = True, title_kwargs = dict(fontsize = 16),\
                      label_kwargs = dict(fontsize =  16), quantiles = (0.16, 0.5, 0.84))
             plt.tight_layout()
             if savename is not None:
@@ -319,7 +416,7 @@ class GFP:
                 if savename is not None:
                     plt.savefig(savename + '_fit.pdf', bbox_inches = 'tight')
                 plt.show()
-            elif self.specclass == 'DB':
+            else:
                 plt.figure(figsize = (10,5))
                 plt.plot(wl, fl, 'k')
                 plt.plot(wl, fit_fl, 'r')

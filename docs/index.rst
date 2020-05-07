@@ -7,4 +7,8 @@ wdtools: Algorithmic Tools for White Dwarf Spectra
    :maxdepth: 2
    :caption: Contents:
 
-   mcfit
+   gfp
+
+   spectrum
+
+   parametric
