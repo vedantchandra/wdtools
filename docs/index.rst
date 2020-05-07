@@ -11,4 +11,4 @@ wdtools: Algorithmic Tools for White Dwarf Spectra
 
    spectrum
 
-   parametric
+   parametrics

@@ -21,7 +21,6 @@ import os
 
 sys.path.insert(0, os.path.abspath('./..'))
 sys.path.insert(0, os.path.abspath('./../..'))
-import wdtools
 
 project = 'wdtools'
 copyright = '2020, Vedant Chandra'
