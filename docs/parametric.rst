@@ -12,5 +12,5 @@ API
 ###
 
 .. autoclass:: wdtools.LineProfiles
-   :special-members:
    :members:
+   :noindex:

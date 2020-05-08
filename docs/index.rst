@@ -2,7 +2,6 @@ wdtools: Algorithmic Tools for White Dwarf Spectra
 ======================================================
 
 
-
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
@@ -11,4 +10,4 @@ wdtools: Algorithmic Tools for White Dwarf Spectra
 
    spectrum
 
-   parametrics
+   parametric

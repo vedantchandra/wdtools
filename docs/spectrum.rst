@@ -10,5 +10,5 @@ API
 ###
 
 .. autoclass:: wdtools.SpecTools
-   :special-members:
    :members:
+   :noindex:

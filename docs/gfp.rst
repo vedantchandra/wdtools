@@ -29,5 +29,5 @@ API
 ###
 
 .. autoclass:: wdtools.GFP
-   :special-members:
    :members:
+   :noindex:

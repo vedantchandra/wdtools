@@ -23,7 +23,7 @@ import corner
 import keras
 from scipy import optimize as opt
 import pyabc
-import bisect.bisect_left as bisect_left
+from bisect import bisect_left
 import warnings
 halpha = 6564.61
 hbeta = 4862.68
