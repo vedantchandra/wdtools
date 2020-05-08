@@ -9,3 +9,4 @@ scipy
 PyAstronomy
 tqdm
 sphinx-autoapi
+tensorflow
