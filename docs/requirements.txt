@@ -10,3 +10,5 @@ PyAstronomy
 tqdm
 sphinx-autoapi
 tensorflow
+lmfit
+scikit-learn
