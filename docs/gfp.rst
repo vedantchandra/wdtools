@@ -15,10 +15,10 @@ Say we have an un-normalized DA spectrum from the Sloan Digital Sky Survey (SDSS
    import wdtools
 
    sp = wdtools.SpecTools()
-   mcfit = wdtools.GFP(resolution = 3, specclass = 'DA')
+   gfp = wdtools.GFP(resolution = 3, specclass = 'DA')
 
    wl_norm, flux_norm, ivar_norm = sp.normalize_balmer(wl, flux, ivar = ivar)
-   sampler = mcfit.fit_spectrum(wl_norm, flux_norm, ivar_norm, init = 'mle', make_plot = True)
+   sampler = gfp.fit_spectrum(wl_norm, flux_norm, ivar_norm, init = 'mle', make_plot = True)
 
 The returned `sampler` object is an emcee sampler instance, from which posterior samples can be obtained using ``sampler.flatchain``, and the chi squared value of each posterior sample can be obtained with ``chis = - 2 * sampler.get_log_probs()``. 
 
