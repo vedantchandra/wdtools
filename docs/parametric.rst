@@ -8,6 +8,8 @@ This module contains tools to fit white dwarf Balmer lines with parametric Voigt
 forest regression model to predict the stellar labels of effective temperature and surface gravity. 
 
 
+
+
 API
 ###
 

@@ -38,14 +38,35 @@ class LineProfiles:
 		self.n_trees = n_trees
 		self.n_bootstrap = n_bootstrap
 		self.linedict = dict(alpha = self.halpha, beta = self.hbeta, gamma = self.hgamma)
-		self.features = ['a_amp', 'a_fwhm', 'a_height',
-                                    'b_amp', 'b_fwhm', 'b_height',
-                                    'g_amp', 'g_fwhm', 'g_height']
+		self.features = features = ['a_fwhm', 'a_height', 'b_fwhm', 'b_height','g_fwhm', 'g_height'] 
 
 
 		self.modelname = 'bootstrap'
 		self.bootstrap_models = [];
-		self.load('all')
+
+		try:
+			self.load('rf_model')
+		except:
+			print('no saved model found. performing one-time initialization, training and saving model with parameters from 5326 SDSS spectra...')
+			df = pd.read_csv(dir_path + '/models/sdss_parameters.csv')
+			features = ['a_fwhm', 'a_height', 'b_fwhm', 'b_height','g_fwhm', 'g_height']
+
+			targets = ['teff', 'logg']
+
+			clean = (
+			    (df['a_fwhm'] < 250)&
+			    (df['g_fwhm'] < 250)&
+			    (df['b_fwhm'] < 250)&
+			    (df['g_height'] < 1)&
+			    (df['a_height'] < 1)&
+			    (df['b_height'] < 1)
+			)
+
+			X_train = np.asarray(df[clean][features])
+			y_train = np.asarray(df[clean][targets])
+
+			self.train(X_train, y_train)
+			self.save('rf_model')
 
 
 	def linear(self, wl, p1, p2):
