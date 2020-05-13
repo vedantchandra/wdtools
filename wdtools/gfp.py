@@ -60,9 +60,9 @@ class GFP:
         self.resolution = {};
 
         self.H_DA = 256
-        self.lamgrid_DA = pickle.load(open(dir_path + '/models/neural_gen/lamgrid.p', 'rb'))
+        self.lamgrid_DA = pickle.load(open(dir_path + '/models/neural_gen/DA_lamgrid.p', 'rb'))
         self.model_DA = self.generator(self.H_DA, len(self.lamgrid_DA))
-        self.model_DA.load_weights(dir_path + '/models/neural_gen/wide_normNN.h5')
+        self.model_DA.load_weights(dir_path + '/models/neural_gen/DA_normNN.h5')
         pix_per_a = len(self.lamgrid_DA) / (self.lamgrid_DA[-1] - self.lamgrid_DA[0])
         self.resolution['DA'] = resolution * pix_per_a
 
@@ -93,8 +93,12 @@ class GFP:
         Label scaler to transform Teff and logg to [0,1] interval based on preset bounds. 
         Parameters
         ---------
-        label_array
+        label_array : array
             Unscaled array with Teff in the first column and logg in the second column
+        Returns
+        -------
+            array
+                Scaled array
         """
         teffs = label_array[:, 0];
         loggs = label_array[:, 1];
@@ -109,6 +113,10 @@ class GFP:
         ---------
         label_array : array
             Scaled array with Teff in the first column and logg in the second column
+        Returns
+        -------
+            array
+                Unscaled array
         """
         teffs = label_array[:, 0];
         loggs = label_array[:, 1];
@@ -126,6 +134,10 @@ class GFP:
             Number of neurons in each hidden layer
         n_pix : int
             Number of pixels on the synthetic spectrum = number of neurons on the last layer. 
+        Returns
+        -------
+            keras `Model`
+                Keras neural network model instance
         """
         x = keras.layers.Input(shape=(2,))
         y = keras.layers.Dense(H,activation='relu',trainable = True)(x)
@@ -139,18 +151,21 @@ class GFP:
 
     def synth_spectrum_sampler(self, wl, teff, logg, rv, specclass = None):
         """
-        Wrapper function that talks to the generative neural network in scaled units, and also performs the Gaussian convolution to instrument resolution. 
+        Generates synthetic spectra from labels using the neural network, translated by some radial velocity. These are _not_ interpolated onto the requested wavelength grid;
+        the interpolation is performed only one time after the Gaussian convolution with the instrument resolution in `GFP.spectrum_sampler`. Use `GFP.spectrum_sampler` in most cases. 
         
         Parameters
         ----------
         wl : array
-            Array of spectral wavelengths on which to generate the synthetic spectrum
+            Array of spectral wavelengths (included for completeness, not used by this function)
         teff : float
             Effective surface temperature of sampled spectrum
         logg : float
             log surface gravity of sampled spectrum (cgs)
         rv : float
-            radial velocity (redshift) of sampled spectrum in km/s
+            Radial velocity (redshift) of sampled spectrum in km/s
+        specclass : str ['DA', 'DB']
+            Whether to use hydrogen-rich (DA) or helium-rich (DB) atmospheric models.
 
         Returns
         -------
@@ -172,6 +187,27 @@ class GFP:
         return synth
 
     def spectrum_sampler(self, wl, teff, logg, rv, specclass = None):
+        """
+        Wrapper function that talks to the generative neural network in scaled units, and also performs the Gaussian convolution to instrument resolution. 
+        
+        Parameters
+        ----------
+        wl : array
+            Array of spectral wavelengths on which to generate the synthetic spectrum
+        teff : float
+            Effective surface temperature of sampled spectrum
+        logg : float
+            log surface gravity of sampled spectrum (cgs)
+        rv : float
+            radial velocity (redshift) of sampled spectrum in km/s
+        specclass : str ['DA', 'DB']
+            Whether to use hydrogen-rich (DA) or helium-rich (DB) atmospheric models.
+        Returns
+        -------
+            array
+                Synthetic spectrum with desired parameters, interpolated onto the supplied wavelength grid and convolved with the instrument resolution. 
+        """
+
         if specclass is None:
             specclass = self.specclass;
         synth = self.synth_spectrum_sampler(self.lamgrid[specclass], teff, logg, rv, specclass)
@@ -459,7 +495,7 @@ class GFP:
         Returns
         -------
             history
-                pyabc history object, from which posterior samples can be obtained using history.get_distribution(), which returns a dataframe of posterior samples along 
+                pyabc history object, from which posterior samples can be obtained using `history.get_distribution()`, which returns a dataframe of posterior samples along 
                 with their respective weights.  
         """
 

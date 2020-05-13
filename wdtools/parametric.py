@@ -22,8 +22,6 @@ class LineProfiles:
 	Probabilistic prediction uses 100 boostrapped random forest models with 25 trees each. 
 	Ground truth labels are taken from Tremblay et al. (2019)
 	Line profiles are fit using the LMFIT package via chi^2 minimization. 
-
-	To get started, use lineprofiles.labels_from_spectrum(wavelength, flux).
 	'''
 
 	def __init__(self, verbose = False, plot_profiles = False, n_trees = 25, n_bootstrap = 25):
@@ -49,7 +47,6 @@ class LineProfiles:
 		except:
 			print('no saved model found. performing one-time initialization, training and saving model with parameters from 5326 SDSS spectra...')
 			df = pd.read_csv(dir_path + '/models/sdss_parameters.csv')
-			features = ['a_fwhm', 'a_height', 'b_fwhm', 'b_height','g_fwhm', 'g_height']
 
 			targets = ['teff', 'logg']
 
@@ -62,7 +59,7 @@ class LineProfiles:
 			    (df['b_height'] < 1)
 			)
 
-			X_train = np.asarray(df[clean][features])
+			X_train = np.asarray(df[clean][self.features])
 			y_train = np.asarray(df[clean][targets])
 
 			self.train(X_train, y_train)
@@ -70,27 +67,36 @@ class LineProfiles:
 
 
 	def linear(self, wl, p1, p2):
-		
-		''' Linear polynomial of degree 1 '''
-
 		return p1 + p2*wl
 
 	def chisquare(self, residual):
-		
-		''' Chi^2 statistics from residual
-
-		Unscaled chi^2 statistic from an array of residuals (does not account for uncertainties).
-		'''
-
 		return np.sum(residual**2)
 
 	def fit_line(self, wl, flux, centroid, window = 400, edges = 200):
-		''' Fit Single Line
-		
-		Base function to fit Voigt profile around a specified centroid on the spectrum. 
+		'''
+		Fit a Voigt profile around a specified centroid on the spectrum. 
 		The continuum is normalized at each absorption line via a simple linear polynimial through the edges.
 		Window size and edge size can be modified. 
 		
+		Parameters
+        ---------
+        wl : array
+            Wavelength array of spectrum
+        flux : array
+        	Flux array of spectrum
+        centroid : float
+        	The theoretical centroid of the absorption line that is being fitted, in wavelength units. 
+        window : float, optional
+        	How many Angstroms away from the line centroid are included in the fit (in both directions). This should be large enough to include the absorption line as well as 
+        	some continuum on either side.
+        edges : float, optional
+        	What distance in Angstroms around each line (measured from the line center outwards) to exclude from the continuum-fitting step. This should be large enough to cover most of the 
+        	absorption line whilst leaving some continuum intact on either side. 
+        Returns
+        -------
+            lmfit `result` object
+                A `result` instance from the `lmfit` package, from which fitted parameters and fit statistics can be extracted. 
+
 		'''
 
 		in1 = bisect_left(wl,centroid-window)
@@ -129,13 +135,27 @@ class LineProfiles:
 
 		return result
 
-	def fit_balmer(self, wl, flux, line = 'all', return_centroids = True):
-		''' Fit 3 Balmer Lines
-		Input: spectrum wavelength, spectrum flux
-		Output: 15 Balmer parameters in array
+	def fit_balmer(self, wl, flux, return_centroids = True):
 
-		Wrapper that runs fit_line on all 3 Balmer lines and returns 5x3 = 15 line parameters from the spectrum. 
 		'''
+		Fits Voigt profiles to the first three Balmer lines (H-alpha, H-beta, and H-gamma). Returns all 15 fitted parameters. 
+		
+		Parameters
+        ---------
+        wl : array
+            Wavelength array of spectrum
+        flux : array
+        	Flux array of spectrum
+        return_centroids : bool, optional
+        	Whether to return centroids or not. Leave as `True` for normal use. 
+
+        Returns
+        -------
+            array
+                Array of 15 Balmer parameters, 5 for each line. 
+
+		'''
+
 		try:
 			alpha_parameters = self.fit_line(wl, flux, self.halpha).params
 			beta_parameters = self.fit_line(wl, flux, self.hbeta).params
@@ -151,9 +171,6 @@ class LineProfiles:
 				return np.repeat(np.nan, 15)
 
 		balmer_parameters = np.concatenate((alpha_parameters, beta_parameters, gamma_parameters))
-
-		if return_centroids == False:
-			balmer_parameters = np.delete(balmer_parameters, [1,7,13]) # Drop line centroids since they aren't used in the model. 
 
 		return balmer_parameters
 
