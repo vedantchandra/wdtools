@@ -6,7 +6,7 @@ __bibtex__ = __citation__ = """@ARTICLE{wdtools,
        author = {{Chandra}, Vedant and {Hwang}, Hsiang-Chih and
          {Zakamska}, Nadia and {Budavari}, Tamas},
         title = "{Computational Techniques for the Spectroscopic Analysis of White Dwarfs}",
-      journal = {MNRAS (submitted)},
+      journal = {MNRAS (in prep.)},
          year = "2020",
 }
 """
