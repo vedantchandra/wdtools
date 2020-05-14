@@ -135,10 +135,10 @@ class LineProfiles:
 
 		return result
 
-	def fit_balmer(self, wl, flux, return_centroids = True):
+	def fit_balmer(self, wl, flux):
 
 		'''
-		Fits Voigt profiles to the first three Balmer lines (H-alpha, H-beta, and H-gamma). Returns all 15 fitted parameters. 
+		Fits Voigt profiles to the first three Balmer lines (H-alpha, H-beta, and H-gamma). Returns all 18 fitted parameters. 
 		
 		Parameters
         ---------
@@ -146,13 +146,11 @@ class LineProfiles:
             Wavelength array of spectrum
         flux : array
         	Flux array of spectrum
-        return_centroids : bool, optional
-        	Whether to return centroids or not. Leave as `True` for normal use. 
 
         Returns
         -------
             array
-                Array of 15 Balmer parameters, 5 for each line. 
+                Array of 18 Balmer parameters, 6 for each line. If the profile fit fails, returns array of 18 `np.nan` values. 
 
 		'''
 
@@ -165,10 +163,7 @@ class LineProfiles:
 		except:
 			raise
 			print('profile fit failed! returning NaN...')
-			if return_centroids == True:
-				return np.repeat(np.nan, 18)
-			else:
-				return np.repeat(np.nan, 15)
+			return np.repeat(np.nan, 18)
 
 		balmer_parameters = np.concatenate((alpha_parameters, beta_parameters, gamma_parameters))
 
@@ -176,68 +171,75 @@ class LineProfiles:
 
 	def train(self, x_data, y_data):
 		'''
-		train random forest model
+		Trains ensemble of random forests on the provided data. Does not require scaling.
+		
+		Parameters
+        ---------
+        x_data : array
+            Input data, independent variables
+        y_data : array
+        	Output data, dependent variables
+
 		'''
-		if self.modelname == 'rf':
-			self.model.fit(x_data, y_data)
 
-			print('random forest trained!')
-			return None
+		self.bootstrap_models = [];
+		kernel = scipy.stats.gaussian_kde(y_data.T)
+		probs = kernel.pdf(y_data.T)
+		weights = 1 / probs
+		weights = weights / np.nansum(weights)
+		
+		for i in range(self.n_bootstrap):
+			idxarray = np.arange(len(x_data))
+			sampleidx = np.random.choice(idxarray, size = int(len(idxarray)*0.67), replace = True, p = weights)
+			X_sample, t_sample = x_data[sampleidx], y_data[sampleidx]
+			rf = RandomForestRegressor(n_estimators = self.n_trees)
+			rf.fit(X_sample,t_sample)
+			self.bootstrap_models.append(rf)
 
-		elif self.modelname == 'bootstrap':
-			self.bootstrap_models = [];
-			kernel = scipy.stats.gaussian_kde(y_data.T)
-			probs = kernel.pdf(y_data.T)
-			weights = 1 / probs
-			weights = weights / np.nansum(weights)
-			
-			for i in range(self.n_bootstrap):
-				idxarray = np.arange(len(x_data))
-				sampleidx = np.random.choice(idxarray, size = int(len(idxarray)*0.67), replace = True, p = weights)
-				X_sample, t_sample = x_data[sampleidx], y_data[sampleidx]
-				rf = RandomForestRegressor(n_estimators = self.n_trees)
-				rf.fit(X_sample,t_sample)
-				self.bootstrap_models.append(rf)
+		print('bootstrap ensemble of random forests is trained!')
 
-			print('bootstrap ensemble of random forests is trained!')
-
-			return None
+		return None
 
 	def labels_from_parameters(self, balmer_parameters):
-		''' Predict Labels from Balmer Parameters
-		Input: 15 Balmer parameters in array or list
-		Output: (Teff (kelvin), Log(g) (log cm/s^2))
-
-		Returns inferred stellar labels from 15 Balmer line parameters. 
-		Pass the output of fit_balmer to this. 
 		'''
+		Predicts stellar labels from Balmer line parameters.
+		
+		Parameters
+        ---------
+        balmer_parameters : array
+            Array of fitted Balmer parameters from the `fit_balmer` function. 
+
+        Returns
+        -------
+            array
+                Array of predicted stellar labels with the following format: [Teff, e_Teff, logg, e_logg]. 
+
+		'''
+
+		df = pd.DataFrame([balmer_parameters], columns = ['a_amp', 'a_center', 'a_sigma', 'a_gamma', 'a_fwhm', 'a_height',\
+                                               'b_amp', 'b_center', 'b_sigma', 'b_gamma', 'b_fwhm', 'b_height',\
+                                               'g_amp', 'g_center', 'g_sigma', 'g_gamma', 'g_fwhm', 'g_height'])
+
+		balmer_parameters = np.asarray(df[self.features])
 
 		balmer_parameters = balmer_parameters.reshape(1,-1)
 		
 		if np.isnan(balmer_parameters).any():
 			print('NaNs detected! Aborting...')
 			return np.repeat(np.nan, 2)
-		
-		if self.modelname == 'rf':
+	
 
-			predictions = self.model.predict(balmer_parameters)[0] # Deploy instantiated model. Defaults to random forest. 
-
-			return predictions
-
-		elif self.modelname == 'bootstrap':
-			predictions = [];
-			for bootstrap_model in self.bootstrap_models:
-				prediction = bootstrap_model.predict(balmer_parameters)[0]
-				predictions.append(prediction)
-			predictions = np.asarray(predictions)
-			mean_prediction = np.mean(predictions,0)
-			std_prediction = np.std(predictions,0)
-			labels = np.asarray([mean_prediction[0], std_prediction[0],mean_prediction[1], std_prediction[1]])
+		predictions = [];
+		for bootstrap_model in self.bootstrap_models:
+			prediction = bootstrap_model.predict(balmer_parameters)[0]
+			predictions.append(prediction)
+		predictions = np.asarray(predictions)
+		mean_prediction = np.mean(predictions,0)
+		std_prediction = np.std(predictions,0)
+		labels = np.asarray([mean_prediction[0], std_prediction[0],mean_prediction[1], std_prediction[1]])
 			
-			return labels
+		return labels
 
-		else:
-			print('Please define a model!')
 
 	def save(self, modelname = 'wd'):
 		pickle.dump(self.bootstrap_models, open(dir_path+'/models/'+modelname+'.p', 'wb'))
@@ -247,22 +249,24 @@ class LineProfiles:
 		self.bootstrap_models = pickle.load(open(dir_path+'/models/'+modelname+'.p', 'rb'))
 
 	def labels_from_spectrum(self, wl, flux):
-		''' Predict Labels from Spectrum
-		Input: wavelengths, fluxes
-		Output: (Teff (kelvin), Log(g) (log cm/s^2))
-
-		All-in-one function that returns inferred stellar labels from
-		a given spectrum by fitting the first 3 Balmer lines
-		and deploying a single model of choice to make an inference.
 		'''
+		Wrapper function that directly predicts stellar labels from a provided spectrum. Performs continuum-normalization, fits Balmer profiles, and uses the bootstrap ensemble of random forests
+		to infer labels. 
+		
+		Parameters
+        ---------
+        wl : array
+            Array of spectrum wavelengths.
+        fl : array
+            Array of spectrum fluxes. Can be normalized or un-normalized. 
 
-		balmer_parameters = self.fit_balmer(wl,flux, return_centroids = True) 
-
-		df = pd.DataFrame([balmer_parameters], columns = ['a_amp', 'a_center', 'a_sigma', 'a_gamma', 'a_fwhm', 'a_height',\
-                                               'b_amp', 'b_center', 'b_sigma', 'b_gamma', 'b_fwhm', 'b_height',\
-                                               'g_amp', 'g_center', 'g_sigma', 'g_gamma', 'g_fwhm', 'g_height'])
-
-		balmer_parameters = np.asarray(df[self.features])
+        Returns
+        -------
+            array
+                Array of predicted stellar labels with the following format: [Teff, e_Teff, logg, e_logg]. 
+		'''
+		
+		balmer_parameters = self.fit_balmer(wl,flux) 
 
 		predictions = self.labels_from_parameters(balmer_parameters) # Deploy instantiated model. Defaults to random forest. 
 
