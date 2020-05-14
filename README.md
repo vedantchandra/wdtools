@@ -1,4 +1,7 @@
 # wdtools
+
+[![Documentation Status](https://readthedocs.org/projects/wdtools/badge/?version=latest)](https://wdtools.readthedocs.io/en/latest/?badge=latest)
+
 Package of tools to analyze white dwarf spectra. This is a work in progress, kindly contact the author for details regarding the current stage of development. 
 
 To get started, clone the repository to your working folder and add this repository to your Python path. For example,
