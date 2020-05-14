@@ -18,6 +18,7 @@ class LineProfiles:
 	
 	'''
 	Class to fit Voigt profiles to the first 3 Balmer absorption lines, and then infer stellar labels.
+
 	Probabilistic prediction uses 100 boostrapped random forest models with 25 trees each, trained on 5326 spectra from the Sloan Digital Sky Survey. 
 	Ground truth labels are taken from Tremblay et al. (2019)
 	Line profiles are fit using the LMFIT package via chi^2 minimization. 
@@ -74,6 +75,7 @@ class LineProfiles:
 	def fit_line(self, wl, flux, centroid, window = 400, edges = 200):
 		'''
 		Fit a Voigt profile around a specified centroid on the spectrum. 
+
 		The continuum is normalized at each absorption line via a simple linear polynimial through the edges.
 		Window size and edge size can be modified. 
 		
@@ -249,8 +251,7 @@ class LineProfiles:
 
 	def labels_from_spectrum(self, wl, flux):
 		'''
-		Wrapper function that directly predicts stellar labels from a provided spectrum. Performs continuum-normalization, fits Balmer profiles, and uses the bootstrap ensemble of random forests
-		to infer labels. 
+		Wrapper function that directly predicts stellar labels from a provided spectrum. Performs continuum-normalization, fits Balmer profiles, and uses the bootstrap ensemble of random forests to infer labels. 
 		
 		Parameters
         ---------

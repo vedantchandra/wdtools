@@ -49,8 +49,7 @@ class SpecTools():
 
     def continuum_normalize(self, wl, fl, ivar = None):
         '''
-        Continuum-normalization with smoothing splines that avoid a pre-made list of absorption lines for DA and DB spectra. To normalize spectra that only have Balmer lines (DA), we
-        recommend using the `normalize_balmer` function instead. Also crops the spectrum to the 3700 - 7000 Angstrom range. 
+        Continuum-normalization with smoothing splines that avoid a pre-made list of absorption lines for DA and DB spectra. To normalize spectra that only have Balmer lines (DA), we recommend using the `normalize_balmer` function instead. Also crops the spectrum to the 3700 - 7000 Angstrom range. 
         
         Parameters
         ---------
@@ -163,6 +162,7 @@ class SpecTools():
 
         '''
         Continuum-normalization of any spectrum by fitting each line individually. 
+
         Fits every absorption line by fitting a linear model added to a Voigt profile to the spectrum, and dividing out the linear model. 
         All normalized lines are concatenated and returned. For statistical and plotting purposes, two adjacent lines should not have overlapping regions (governed by the `distance_dict`). 
         
@@ -285,7 +285,9 @@ class SpecTools():
 
         '''
         Statistical inference of spectral redshift by iteratively fitting Voigt profiles to cropped windows around the line centroid. 
+
         TODO: Add ivar
+
         Parameters
         ---------
         wl : array
@@ -309,7 +311,7 @@ class SpecTools():
         -------
             tuple
                 Tuple of 3 values: the mean fitted centroid across iterations, the propagated uncertainty reported by the fitting routine, and the standard deviation
-                of the centroid across all iterations. We find the latter is a good estimator of statistical uncertainty in the fitted centroid. 
+                of the centroid across all iterations. We find the latter is a good estimator of statistical uncertainty in the fitted centroid. s
 
         '''
     

@@ -9,7 +9,7 @@ This module contains general tools to process white dwarf spectra.
 Continuum-Normalizing Balmer Lines
 ####################################
 
-Continuum-normalizing white dwarf spectra is a challenging task due to the strength of the Balmer absorption lines. :cite:`Bergeron1995` and subsequent studies propose normalizing
+Continuum-normalizing white dwarf spectra is a challenging task due to the strength of the Balmer absorption lines. Past studies propose normalizing
 each Balmer line individually using the sum of Gaussian functions. We adapt this approach to fit the sum of a linear function and Voigt function to the spectrum around each Balmer line,
 and then divide out the linear component to obtain the continuum-normalized spectrum for each absorption line. We concatenate these normalized lines into a discontinuous spectrum that can be
 fitted with the ``wdtools.GFP`` routines. 

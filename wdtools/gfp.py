@@ -45,11 +45,14 @@ def find_nearest(array, value):
 class GFP:
 
     """ Generative Fitting Pipeline. 
+
     """
 
     def __init__(self, resolution = 3, specclass = 'DA'):
 
         '''
+        Initializes class. 
+
         Parameters
         ---------
         resolution : float
@@ -94,6 +97,7 @@ class GFP:
 
         """
         Label scaler to transform Teff and logg to [0,1] interval based on preset bounds. 
+
         Parameters
         ---------
         label_array : array
@@ -112,6 +116,7 @@ class GFP:
     def inv_label_sc(self, label_array):
         """
         Inverse label scaler to transform Teff and logg from [0,1] to original scale based on preset bounds. 
+
         Parameters
         ---------
         label_array : array
@@ -155,7 +160,8 @@ class GFP:
     def synth_spectrum_sampler(self, wl, teff, logg, rv, specclass = None):
         """
         Generates synthetic spectra from labels using the neural network, translated by some radial velocity. These are _not_ interpolated onto the requested wavelength grid;
-        the interpolation is performed only one time after the Gaussian convolution with the instrument resolution in `GFP.spectrum_sampler`. Use `GFP.spectrum_sampler` in most cases. 
+
+        The interpolation is performed only one time after the Gaussian convolution with the instrument resolution in `GFP.spectrum_sampler`. Use `GFP.spectrum_sampler` in most cases. 
         
         Parameters
         ----------
@@ -474,8 +480,9 @@ class GFP:
     def fit_spectrum_abc(self, wl, fl, ivar = None, make_plot = False, popsize = 100, max_pops = 25):
 
         """
-        Alternative fitting routine that employs Approximate Bayesian Computation (ABC) to recover posterior parameters. In this framework,
-        the chi^2 is treated like a 'distance' rather than a formal likelihood. This is especially well-suited to situations where the chi^2 assumptions
+        Alternative fitting routine that employs Approximate Bayesian Computation (ABC) to recover posterior parameters. 
+
+        In this framework, the chi^2 is treated like a 'distance' rather than a formal likelihood. This is especially well-suited to situations where the chi^2 assumptions
         are not held, or when the spectral variance mask is not defined. 
         
         Parameters
