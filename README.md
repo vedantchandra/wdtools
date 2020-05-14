@@ -14,7 +14,7 @@ gfp = wdtools.GFP(resolution = 3)
 result = gfp.fit_spectrum(wl_norm, flux_norm, ivar_norm, make_plot = True)
 ```
 
-Full documentation is available here: https://wdtools.readthedocs.io/en/latest/. 
+**Documentation:** https://wdtools.readthedocs.io/en/latest/. 
 
 ## References
 
