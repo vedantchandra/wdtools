@@ -6,20 +6,19 @@ from lmfit.models import VoigtModel
 import pandas as pd
 import pickle
 import os
-plt.rcParams.update({'font.size': 18})
-path = os.path.abspath(__file__)
-dir_path = os.path.dirname(path)
-# from .neural import ANN
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.utils import resample
 import scipy
 
+plt.rcParams.update({'font.size': 18})
+path = os.path.abspath(__file__)
+dir_path = os.path.dirname(path)
+
 class LineProfiles:
 	
 	'''
-	General class to fit Voigt profiles to the first 3 Balmer absorption lines, and then infer stellar labels.
-	Uses a 25-tree random forest model by default, trained on 5326 spectra from the Sloan Digital Sky Survey. 
-	Probabilistic prediction uses 100 boostrapped random forest models with 25 trees each. 
+	Class to fit Voigt profiles to the first 3 Balmer absorption lines, and then infer stellar labels.
+	Probabilistic prediction uses 100 boostrapped random forest models with 25 trees each, trained on 5326 spectra from the Sloan Digital Sky Survey. 
 	Ground truth labels are taken from Tremblay et al. (2019)
 	Line profiles are fit using the LMFIT package via chi^2 minimization. 
 	'''
@@ -265,7 +264,7 @@ class LineProfiles:
             array
                 Array of predicted stellar labels with the following format: [Teff, e_Teff, logg, e_logg]. 
 		'''
-		
+
 		balmer_parameters = self.fit_balmer(wl,flux) 
 
 		predictions = self.labels_from_parameters(balmer_parameters) # Deploy instantiated model. Defaults to random forest. 

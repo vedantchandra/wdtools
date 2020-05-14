@@ -7,15 +7,9 @@ import pandas as pd
 import glob
 import pickle
 from astropy import table 
-Table = table.Table
 import sys
 from tqdm import tqdm
 from scipy import interpolate
-interp1d = interpolate.interp1d
-def find_nearest(array, value):
-    array = np.asarray(array)
-    idx = (np.abs(array - value)).argmin()
-    return idx
 import os
 from PyAstronomy import pyasl
 import emcee
@@ -25,6 +19,12 @@ from scipy import optimize as opt
 import pyabc
 from bisect import bisect_left
 import warnings
+
+from .spectrum import SpecTools
+
+interp1d = interpolate.interp1d
+Table = table.Table
+
 halpha = 6564.61
 hbeta = 4862.68
 hgamma = 4341.68
@@ -32,12 +32,15 @@ hdelta = 4102.89
 planck_h = 6.62607004e-34
 speed_light = 299792458
 k_B = 1.38064852e-23
+
 path = os.path.abspath(__file__)
 dir_path = os.path.dirname(path)
 plt.rcParams.update({'font.size': 16})
 
-
-from .spectrum import SpecTools
+def find_nearest(array, value):
+    array = np.asarray(array)
+    idx = (np.abs(array - value)).argmin()
+    return idx
 
 class GFP:
 

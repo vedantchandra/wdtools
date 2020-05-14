@@ -1,5 +1,4 @@
 import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
 import numpy as np
 from bisect import bisect_left
 from scipy.optimize import curve_fit
@@ -7,16 +6,18 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import pickle
 import os
-plt.rcParams.update({'font.size': 18})
-path = os.path.abspath(__file__)
-dir_path = os.path.dirname(path)
 import scipy
 from PyAstronomy.pyasl import crosscorrRV, quadExtreme, dopplerShift
 from scipy.interpolate import interp1d
 import lmfit
 from lmfit.models import LinearModel, VoigtModel, GaussianModel
-speed_light = 299792458 #m/s
 import numpy.polynomial.polynomial as poly
+
+speed_light = 299792458 #m/s
+
+plt.rcParams.update({'font.size': 18})
+path = os.path.abspath(__file__)
+dir_path = os.path.dirname(path)
 
 class SpecTools():
 
@@ -46,7 +47,28 @@ class SpecTools():
         self.params['l_slope'].set(value = 0)
 
 
-    def continuum_normalize(self, wl, fl, ivar = None, n_iter = 10, threshold = 0.5):
+    def continuum_normalize(self, wl, fl, ivar = None):
+        '''
+        Continuum-normalization with smoothing splines that avoid a pre-made list of absorption lines for DA and DB spectra. To normalize spectra that only have Balmer lines (DA), we
+        recommend using the `normalize_balmer` function instead. Also crops the spectrum to the 3700 - 7000 Angstrom range. 
+        
+        Parameters
+        ---------
+        wl : array
+            Wavelength array of spectrum
+        fl : array
+            Flux array of spectrum
+        ivar : array, optional
+            Inverse variance array. If `None`, will return only the normalized wavelength and flux. 
+
+        Returns
+        -------
+            tuple
+                Tuple of cropped wavelength, cropped and normalized flux, and (if ivar is not None) cropped and normalized inverse variance array. 
+
+        '''
+
+
         cmask = (
             ((wl > 6900) * (wl < 7500)) +\
             ((wl > 6200) * (wl < 6450)) +\
@@ -77,6 +99,31 @@ class SpecTools():
             return wl, norm
 
     def normalize_line(self, wl, fl, ivar, centroid, distance, make_plot = False):
+
+        '''
+        Continuum-normalization of a single absorption line by fitting a linear model added to a Voigt profile to the spectrum, and dividing out the linear model. 
+        
+        Parameters
+        ---------
+        wl : array
+            Wavelength array of spectrum
+        fl : array
+            Flux array of spectrum
+        ivar : array, optional
+            Inverse variance array. If `None`, will return only the normalized wavelength and flux. 
+        centroid : float
+            The theoretical centroid of the absorption line that is being fitted, in wavelength units.
+        distance : float
+            Distance in Angstroms away from the line centroid to include in the fit. Should include the entire absorption line wings with minimal continum. 
+        make_plot : bool, optional
+            Whether to plot the linear + Voigt fit. Use for debugging. 
+
+        Returns
+        -------
+            tuple
+                Tuple of cropped wavelength, cropped and normalized flux, and (if ivar is not None) cropped and normalized inverse variance array. 
+
+        '''
 
         self.params['v_center'].set(value = centroid)
 
@@ -113,6 +160,44 @@ class SpecTools():
                              centroid_dict = dict(alpha = 6564.61, beta = 4862.68, gamma = 4341.68, delta = 4102.89, eps = 3971.20, h8 = 3890.12),
                                 distance_dict = dict(alpha = 300, beta = 200, gamma = 120, delta = 75, eps = 50, h8 = 25), sky_fill = np.nan):
         
+
+        '''
+        Continuum-normalization of any spectrum by fitting each line individually. 
+        Fits every absorption line by fitting a linear model added to a Voigt profile to the spectrum, and dividing out the linear model. 
+        All normalized lines are concatenated and returned. For statistical and plotting purposes, two adjacent lines should not have overlapping regions (governed by the `distance_dict`). 
+        
+        Parameters
+        ---------
+        wl : array
+            Wavelength array of spectrum
+        fl : array
+            Flux array of spectrum
+        ivar : array, optional
+            Inverse variance array. If `None`, will return only the normalized wavelength and flux. 
+        lines : array-like, optional
+            Array of which Balmer lines to include in the fit. Can be any combination of ['alpha', 'beta', 'gamma', 'delta', 'eps', 'h8']
+        skylines : bool, optional
+            If True, masks out pre-selected telluric features and replace them with `np.nan`. 
+        make_plot : bool, optional
+            Whether to plot the continuum-normalized spectrum.
+        make_subplot : bool, optional
+            Whether to plot each individual fit of the linear + Voigt profiles. Use for debugging. 
+        make_stackedplot : bool, optional
+            Plot continuum-normalized lines stacked with a common centroid, vertically displaced for clarity. 
+        centroid_dict : dict, optional
+            Dictionary of centroid names and theoretical wavelengths. Change this if your wavelength calibration is different from SDSS. 
+        distance_dict : dict, optional
+            Dictionary of centroid names and distances from the centroid to include in the normalization process. Should include the entire wings of each line and minimal continuum. No 
+            two adjacent lines should have overlapping regions. 
+
+        Returns
+        -------
+            tuple
+                Tuple of cropped wavelength, cropped and normalized flux, and (if ivar is not None) cropped and normalized inverse variance array. 
+
+        '''
+
+
         fl_normalized = [];
         wl_normalized = [];
         ivar_normalized = [];
@@ -197,6 +282,36 @@ class SpecTools():
 
     def find_centroid(self, wl, flux, centroid, half_window = 25, window_step = 2, n_fit = 12, make_plot = False, \
                  pltname = ''):
+
+        '''
+        Statistical inference of spectral redshift by iteratively fitting Voigt profiles to cropped windows around the line centroid. 
+        TODO: Add ivar
+        Parameters
+        ---------
+        wl : array
+            Wavelength array of spectrum
+        flux : array
+            Flux array of spectrum
+        centroid : float
+            Theoretical wavelength of line centroid
+        half_window : float, optional
+            Distance in Angstroms from the theoretical centroid to include in the fit
+        window_step : float, optional
+            Step size in Angstroms to reduce the half-window size after each fitting iteration
+        n_fit : int, optional
+            Number of iterated fits to perform
+        make_plot : bool, optional
+            Whether to plot the absorption line with all fits overlaid.
+        pltname : str, optional
+            If not '', saves the plot to the supplied path with whatever extension you specify. 
+
+        Returns
+        -------
+            tuple
+                Tuple of 3 values: the mean fitted centroid across iterations, the propagated uncertainty reported by the fitting routine, and the standard deviation
+                of the centroid across all iterations. We find the latter is a good estimator of statistical uncertainty in the fitted centroid. 
+
+        '''
     
         window_step = -window_step
         in1 = bisect_left(wl,centroid-60)
