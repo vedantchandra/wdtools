@@ -20,6 +20,11 @@ Say we have an un-normalized DA spectrum from the Sloan Digital Sky Survey (SDSS
    wl_norm, flux_norm, ivar_norm = sp.normalize_balmer(wl, flux, ivar = ivar)
    sampler = gfp.fit_spectrum(wl_norm, flux_norm, ivar_norm, init = 'mle', make_plot = True)
 
+   medians = np.median(sampler.flatchain, axis = 0)
+   teff = medians[0] # Kelvin
+   logg = medians[1] # log[cm/s^2]
+   rv = medians[2] # km/s
+
 The returned `sampler` object is an emcee sampler instance, from which posterior samples can be obtained using ``sampler.flatchain``, and the chi squared value of each posterior sample can be obtained with ``chis = - 2 * sampler.get_log_probs()``. 
 
 .. bibliography:: bib.bib

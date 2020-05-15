@@ -226,7 +226,19 @@ class SpecTools():
         
         if make_plot:
             plt.plot(wl_normalized, fl_normalized, 'k')
-            
+
+        if make_stackedplot:
+            breakpoints = np.nonzero(np.diff(wl_normalized) > 5)[0]
+            breakpoints = np.concatenate(([0], breakpoints, [None]))
+            plt.figure(figsize = (5,8))
+            for kk in range(len(breakpoints) - 1):
+                wl_seg = wl_normalized[breakpoints[kk] + 1:breakpoints[kk+1]]
+                fl_seg = fl_normalized[breakpoints[kk] + 1:breakpoints[kk+1]]
+                peak = int(len(wl_seg)/2)
+                delta_wl = wl_seg - wl_seg[peak]
+                plt.plot(delta_wl, 1 + fl_seg - 0.35 * kk, 'k')
+            plt.show()
+
         if ivar is not None:
             return wl_normalized, fl_normalized, ivar_normalized
         else:

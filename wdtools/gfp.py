@@ -563,9 +563,3 @@ class GFP:
             plt.show()
 
         return history
-
-    def blackbody(self, wl, teff):
-        wl = wl * 1e-10
-        num = 2 * planck_h * speed_light**2
-        denom = wl**5 * (np.exp((planck_h * speed_light) / (wl * k_B * teff)) - 1)
-        return num/denom
