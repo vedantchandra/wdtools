@@ -46,24 +46,7 @@ class LineProfiles:
 			self.load('rf_model')
 		except:
 			print('no saved model found. performing one-time initialization, training and saving model with parameters from 5326 SDSS spectra...')
-			df = pd.read_csv(dir_path + '/models/sdss_parameters.csv')
-
-			targets = ['teff', 'logg']
-
-			clean = (
-			    (df['a_fwhm'] < 250)&
-			    (df['g_fwhm'] < 250)&
-			    (df['b_fwhm'] < 250)&
-			    (df['g_height'] < 1)&
-			    (df['a_height'] < 1)&
-			    (df['b_height'] < 1)
-			)
-
-			X_train = np.asarray(df[clean][self.features])
-			y_train = np.asarray(df[clean][targets])
-
-			self.train(X_train, y_train)
-			self.save('rf_model')
+			self.initialize();
 
 
 	def linear(self, wl, p1, p2):
@@ -71,6 +54,26 @@ class LineProfiles:
 
 	def chisquare(self, residual):
 		return np.sum(residual**2)
+
+	def initialize(self):
+		df = pd.read_csv(dir_path + '/models/sdss_parameters.csv')
+
+		targets = ['teff', 'logg']
+
+		clean = (
+			    (df['a_fwhm'] < 250)&
+			    (df['g_fwhm'] < 250)&
+			    (df['b_fwhm'] < 250)&
+			    (df['g_height'] < 1)&
+			    (df['a_height'] < 1)&
+			    (df['b_height'] < 1)
+		)
+
+		X_train = np.asarray(df[clean][self.features])
+		y_train = np.asarray(df[clean][targets])
+
+		self.train(X_train, y_train)
+		self.save('rf_model')
 
 	def fit_line(self, wl, flux, centroid, window = 400, edges = 200):
 		'''

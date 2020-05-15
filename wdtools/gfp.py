@@ -65,14 +65,14 @@ class GFP:
         self.res_ang = resolution
         self.resolution = {};
 
-        self.H_DA = 256
+        self.H_DA = 128
         self.lamgrid_DA = pickle.load(open(dir_path + '/models/neural_gen/DA_lamgrid.p', 'rb'))
         self.model_DA = self.generator(self.H_DA, len(self.lamgrid_DA))
         self.model_DA.load_weights(dir_path + '/models/neural_gen/DA_normNN.h5')
         pix_per_a = len(self.lamgrid_DA) / (self.lamgrid_DA[-1] - self.lamgrid_DA[0])
         self.resolution['DA'] = resolution * pix_per_a
 
-        self.H_DB = 256
+        self.H_DB = 128
         self.lamgrid_DB = pickle.load(open(dir_path + '/models/neural_gen/DB_lamgrid.p', 'rb'))
         self.model_DB = self.generator(self.H_DB, len(self.lamgrid_DB))
         self.model_DB.load_weights(dir_path + '/models/neural_gen/DB_normNN.h5')
@@ -149,6 +149,7 @@ class GFP:
         """
         x = keras.layers.Input(shape=(2,))
         y = keras.layers.Dense(H,activation='relu',trainable = True)(x)
+        y = keras.layers.Dense(H,activation='relu',trainable = True)(y)
         y = keras.layers.Dense(H,activation='relu',trainable = True)(y)
         out = keras.layers.Dense(n_pix,activation='linear',trainable = True)(y)
         
@@ -563,3 +564,9 @@ class GFP:
             plt.show()
 
         return history
+
+    def blackbody(self, wl, teff):
+        wl = wl * 1e-10
+        num = 2 * planck_h * speed_light**2
+        denom = wl**5 * (np.exp((planck_h * speed_light) / (wl * k_B * teff)) - 1)
+        return num/denom

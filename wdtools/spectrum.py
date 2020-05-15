@@ -47,7 +47,7 @@ class SpecTools():
         self.params['l_slope'].set(value = 0)
 
 
-    def continuum_normalize(self, wl, fl, ivar = None):
+    def continuum_normalize(self, wl, fl, ivar = None, croprange = (0, 2)):
         '''
         Continuum-normalization with smoothing splines that avoid a pre-made list of absorption lines for DA and DB spectra. To normalize spectra that only have Balmer lines (DA), we recommend using the `normalize_balmer` function instead. Also crops the spectrum to the 3700 - 7000 Angstrom range. 
         
@@ -75,7 +75,7 @@ class SpecTools():
             ((wl > 4600) * (wl < 4670)) +\
             ((wl > 4200) * (wl < 4300)) +\
             ((wl > 3910) * (wl < 3950)) +\
-            ((wl > 3750) * (wl < 3775)) + ((wl > np.min(wl)) * (wl < np.min(wl) + 50)) + ((wl < np.max(wl)) * (wl > np.max(wl) - 50))
+            ((wl > 3750) * (wl < 3775)) + ((wl > np.min(wl)) * (wl < np.min(wl) + 50)) + (wl > 7500)
             )
 
         spl = scipy.interpolate.splrep(wl[cmask], fl[cmask], k = 1 , s = 1000)
@@ -83,19 +83,15 @@ class SpecTools():
         # plt.plot(wl, fl)
         # plt.plot(wl,scipy.interpolate.splev(wl, spl))
         # plt.show()
-        c1 = bisect_left(wl, 3700)
-        c2 = bisect_left(wl, 7000)
         norm = fl/scipy.interpolate.splev(wl, spl)
 
-        fl = fl[c1:c2]
-        wl = wl[c1:c2]
-        norm = norm[c1:c2]
+        valid = (norm > croprange[0]) * (norm < croprange[1])
 
         if ivar is not None:
-            ivar_norm = ivar[c1:c2] * scipy.interpolate.splev(wl, spl)**2
-            return wl, norm, ivar_norm
+            ivar_norm = ivar * scipy.interpolate.splev(wl, spl)**2
+            return wl[valid], norm[valid], ivar_norm[valid]
         elif ivar is None:
-            return wl, norm
+            return wl[valid], norm[valid]
 
     def normalize_line(self, wl, fl, ivar, centroid, distance, make_plot = False):
 
