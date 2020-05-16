@@ -1,6 +1,6 @@
 # wdtools
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.3828008.svg)](https://doi.org/10.5281/zenodo.3828008)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.3828007.svg)](https://doi.org/10.5281/zenodo.3828007)
 [![Documentation Status](https://readthedocs.org/projects/wdtools/badge/?version=latest)](https://wdtools.readthedocs.io/en/latest/?badge=latest)
 
 Package of tools to analyze white dwarf spectra. This is a work in progress, kindly contact the author for details regarding the current stage of development. 
