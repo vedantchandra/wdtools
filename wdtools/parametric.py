@@ -24,7 +24,7 @@ class LineProfiles:
 	Line profiles are fit using the LMFIT package via chi^2 minimization. 
 	'''
 
-	def __init__(self, verbose = False, plot_profiles = False, n_trees = 25, n_bootstrap = 25):
+	def __init__(self, verbose = False, plot_profiles = False, n_trees = 25, n_bootstrap = 25, lines = ['alpha', 'beta', 'gamma']):
 
 		self.verbose = verbose
 		self.optimizer = 'lm'
@@ -35,17 +35,26 @@ class LineProfiles:
 		self.plot_profiles = plot_profiles
 		self.n_trees = n_trees
 		self.n_bootstrap = n_bootstrap
-		self.linedict = dict(alpha = self.halpha, beta = self.hbeta, gamma = self.hgamma)
-		self.features = features = ['a_fwhm', 'a_height', 'b_fwhm', 'b_height','g_fwhm', 'g_height'] 
+		self.lines = lines
+		self.linedict = dict(alpha = self.halpha, beta = self.hbeta, gamma = self.hgamma, delta = self.hdelta)
+		self.window_dict = dict(alpha = 400, beta = 400, gamma = 150, delta = 75)
+		self.edge_dict = dict(alpha = 200, beta = 200, gamma = 75, delta = 65)
 
+		self.features = [];
+		self.line_ident = '_'
+		self.fit_params = ['amp', 'center', 'sigma', 'gamma', 'fwhm', 'height']
+		for linename in lines:
+			self.features.append(linename[0] + '_fwhm')
+			self.features.append(linename[0] + '_height')
+			self.line_ident = self.line_ident + linename[0]
 
 		self.modelname = 'bootstrap'
 		self.bootstrap_models = [];
 
 		try:
-			self.load('rf_model')
+			self.load('rf_model' + self.line_ident)
 		except:
-			print('no saved model found. performing one-time initialization, training and saving model with parameters from 5326 SDSS spectra...')
+			print('no saved model found for this combination of lines. performing one-time initialization, training and saving model with parameters from 5326 SDSS spectra...')
 			self.initialize();
 
 
@@ -56,26 +65,29 @@ class LineProfiles:
 		return np.sum(residual**2)
 
 	def initialize(self):
+		pass
 		df = pd.read_csv(dir_path + '/models/sdss_parameters.csv')
 
 		targets = ['teff', 'logg']
 
 		clean = (
-			    (df['a_fwhm'] < 250)&
-			    (df['g_fwhm'] < 250)&
-			    (df['b_fwhm'] < 250)&
-			    (df['g_height'] < 1)&
-			    (df['a_height'] < 1)&
-			    (df['b_height'] < 1)
+		    (df['a_fwhm'] < 250)&
+		    (df['g_fwhm'] < 250)&
+		    (df['b_fwhm'] < 250)&
+		    (df['d_fwhm'] < 250)&
+		    (df['d_height'] < 1)&
+		    (df['g_height'] < 1)&
+		    (df['a_height'] < 1)&
+		    (df['b_height'] < 1)
 		)
 
 		X_train = np.asarray(df[clean][self.features])
 		y_train = np.asarray(df[clean][targets])
 
 		self.train(X_train, y_train)
-		self.save('rf_model')
+		self.save('rf_model' + self.line_ident)
 
-	def fit_line(self, wl, flux, centroid, window = 400, edges = 200):
+	def fit_line(self, wl, flux, centroid, window = 400, edges = 200, make_plot = False):
 		'''
 		Fit a Voigt profile around a specified centroid on the spectrum. 
 
@@ -123,23 +135,25 @@ class LineProfiles:
 
 		result = voigtfitter.fit(continuum_normalized, params, x = cropped_wl, nan_policy = 'omit', method=self.optimizer, fit_kws={'reduce_fcn':self.chisquare})
 
-		if self.plot_profiles == True:
+		if make_plot:
 			plt.figure(figsize = (7,5), )
 			plt.plot(cropped_wl,1-continuum_normalized, 'k')
 			plt.plot(cropped_wl,1-voigtfitter.eval(result.params, x = cropped_wl),'r')
 			plt.xlabel('Wavelength ($\mathrm{\AA}$)')
 			plt.ylabel('Normalized Flux')
 			if centroid == self.halpha:
-				plt.title(r'H-$\alpha$')
+				plt.title(r'H$\alpha$')
 			elif centroid == self.hbeta:
-				plt.title(r'H-$\beta$')
+				plt.title(r'H$\beta$')
 			elif centroid == self.hgamma:
-				plt.title(r'H-$\gamma$')
+				plt.title(r'H$\gamma$')
+			elif centroid == self.hdelta:
+				plt.title(r'H$\delta$')
 			plt.show()
 
 		return result
 
-	def fit_balmer(self, wl, flux):
+	def fit_balmer(self, wl, flux, make_plot = False):
 
 		'''
 		Fits Voigt profiles to the first three Balmer lines (H-alpha, H-beta, and H-gamma). Returns all 18 fitted parameters. 
@@ -157,11 +171,13 @@ class LineProfiles:
                 Array of 18 Balmer parameters, 6 for each line. If the profile fit fails, returns array of 18 `np.nan` values. 
 
 		'''
-
+		colnames = [];
+		parameters = [];
 		try:
-			alpha_parameters = self.fit_line(wl, flux, self.halpha).params
-			beta_parameters = self.fit_line(wl, flux, self.hbeta).params
-			gamma_parameters = self.fit_line(wl, flux, self.hgamma, window = 150, edges = 75).params # Modified window for H-Gamma due to the nearby H-Delta line
+			for linename in self.lines:
+				line_parameters = np.asarray(self.fit_line(wl, flux, self.linedict[linename], self.window_dict[linename], self.edge_dict[linename], make_plot = make_plot).params)
+				colnames.extend([linename[0] + '_' + fparam for fparam in self.fit_params])
+				parameters.extend(line_parameters)
 		except KeyboardInterrupt:
 			raise
 		except:
@@ -169,7 +185,7 @@ class LineProfiles:
 			print('profile fit failed! returning NaN...')
 			return np.repeat(np.nan, 18)
 
-		balmer_parameters = np.concatenate((alpha_parameters, beta_parameters, gamma_parameters))
+		balmer_parameters = pd.DataFrame([parameters], columns = colnames)
 
 		return balmer_parameters
 
@@ -220,9 +236,7 @@ class LineProfiles:
 
 		'''
 
-		df = pd.DataFrame([balmer_parameters], columns = ['a_amp', 'a_center', 'a_sigma', 'a_gamma', 'a_fwhm', 'a_height',\
-                                               'b_amp', 'b_center', 'b_sigma', 'b_gamma', 'b_fwhm', 'b_height',\
-                                               'g_amp', 'g_center', 'g_sigma', 'g_gamma', 'g_fwhm', 'g_height'])
+		df = balmer_parameters
 
 		balmer_parameters = np.asarray(df[self.features])
 
@@ -252,7 +266,7 @@ class LineProfiles:
 	def load(self, modelname = 'wd'):
 		self.bootstrap_models = pickle.load(open(dir_path+'/models/'+modelname+'.p', 'rb'))
 
-	def labels_from_spectrum(self, wl, flux):
+	def labels_from_spectrum(self, wl, flux, make_plot = False):
 		'''
 		Wrapper function that directly predicts stellar labels from a provided spectrum. Performs continuum-normalization, fits Balmer profiles, and uses the bootstrap ensemble of random forests to infer labels. 
 		
@@ -269,7 +283,7 @@ class LineProfiles:
                 Array of predicted stellar labels with the following format: [Teff, e_Teff, logg, e_logg]. 
 		'''
 
-		balmer_parameters = self.fit_balmer(wl,flux) 
+		balmer_parameters = self.fit_balmer(wl,flux, make_plot = make_plot) 
 
 		predictions = self.labels_from_parameters(balmer_parameters) # Deploy instantiated model. Defaults to random forest. 
 
