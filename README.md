@@ -7,7 +7,7 @@ Package of tools to analyze white dwarf spectra. This is a work in progress, kin
 
 **Full Documentation:** https://wdtools.readthedocs.io/en/latest/. 
 
-To get started, clone the repository to your working folder and add this repository to your Python path. We recommend installing dependencies using ``conda`` and the provided ``wdtools.yaml`` file. 
+To get started, clone the repository to your working folder and add this repository to your Python path. We recommend installing dependencies using ``conda`` and the provided ``environment.yaml`` file. 
 
 Example usage of wdtools to infer the temperature and surface gravity of a white dwarf from its spectrum:
 
@@ -21,7 +21,7 @@ import wdtools
 
 gfp = wdtools.GFP(resolution = 3)
 
-result = gfp.fit_spectrum(wl_norm, flux_norm, ivar_norm, make_plot = True)
+result = gfp.fit_spectrum(wl_norm, flux_norm, ivar_norm, init = 'de', make_plot = True)
 
 medians = np.median(result.flatchain, axis = 0)
 iqrs = np.stats.iqr(result.flatchain, axis = 0, rng = (0.16, 0.84))
