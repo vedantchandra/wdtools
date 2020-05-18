@@ -16,7 +16,6 @@ import emcee
 import corner
 import keras
 from scipy import optimize as opt
-import pyabc
 from bisect import bisect_left
 import warnings
 
@@ -264,7 +263,7 @@ class GFP:
         
         return func(wl)
 
-    def fit_spectrum(self, wl, fl, ivar, nwalkers = 50, burn = 100, n_draws = 50, make_plot = True, threads = 1, \
+    def fit_spectrum(self, wl, fl, ivar, nwalkers = 100, burn = 100, n_draws = 50, make_plot = True, threads = 1, \
                     plot_trace = False, init = 'unif', prior_teff = None, mleburn = 50, savename = None, isbinary = None, mask_threshold = 100):
 
         """
@@ -477,93 +476,6 @@ class GFP:
 
         return sampler
 
-
-    def fit_spectrum_abc(self, wl, fl, ivar = None, make_plot = False, popsize = 100, max_pops = 25):
-
-        """
-        Alternative fitting routine that employs Approximate Bayesian Computation (ABC) to recover posterior parameters. 
-
-        In this framework, the chi^2 is treated like a 'distance' rather than a formal likelihood. This is especially well-suited to situations where the chi^2 assumptions
-        are not held, or when the spectral variance mask is not defined. 
-        
-        Parameters
-        ----------
-        wl : array
-            Array of observed spectral wavelengths
-        fl : array
-            Array of observed spectral fluxes
-        ivar : array, optional
-            Array of observed inverse-variance for uncertainty estimation. If a full inverse variance matrix is not available, simply leave this as None. 
-        popsize : int, optional
-            Number of particles used in the ABC algorithm. 
-        max_pops: int, optional
-            Number of steps after which ABC sampling is concluded. It is generally safer to leave this large and manually end sampling when the epsilon
-            distances bottom out and stop decreasing. 
-        make_plot: bool, optional
-            If True, produces a plot of the best-fit synthetic spectrum over the observed spectrum, as well as a KDE corner plot of the fitted parameters. 
-
-
-        Returns
-        -------
-            history
-                pyabc history object, from which posterior samples can be obtained using `history.get_distribution()`, which returns a dataframe of posterior samples along 
-                with their respective weights.  
-        """
-
-
-
-        if ivar is None:
-            ivar = 1
-
-        obs = dict(spec = fl)
-
-        def sim(params):
-            fl_sample = self.spectrum_sampler(wl, params['teff'], params['logg'], params['rv'])
-            return dict(spec = fl_sample)
-
-        def distance(sim1, sim2):
-            resid = sim1['spec'] - sim2['spec']
-            chisq = np.nansum(resid**2 * ivar)
-            return chisq
-
-        priors = pyabc.Distribution(teff = pyabc.RV("uniform", 6000, 74000),
-                                       logg = pyabc.RV("uniform", 6.5, 3),
-                                       rv = pyabc.RV("uniform", -300, 600))
-
-        abc = pyabc.ABCSMC(sim, priors,\
-                           distance, sampler = pyabc.sampler.SingleCoreSampler(),\
-                           population_size = popsize, \
-                           eps = pyabc.epsilon.QuantileEpsilon(alpha = 0.5))
-
-        db = ("sqlite:///mcfit.db")
-        abc.new(db, obs)
-
-        history = abc.run(min_acceptance_rate = 0.01, max_nr_populations = max_pops)
-
-        if make_plot:
-            pyabc.visualization.plot_kde_matrix_highlevel(history, height = 4)
-            plt.show()
-
-            df, w = history.get_distribution()
-            plt.figure(figsize = (8,5))
-            medians = df.median()
-            fit_fl = self.spectrum_sampler(wl, medians['teff'], medians['logg'], medians['rv'])
-            breakpoints = np.nonzero(np.diff(wl) > 5)[0]
-            breakpoints = np.concatenate(([0], breakpoints, [None]))
-
-            for kk in range(len(breakpoints) - 1):
-                wl_seg = wl[breakpoints[kk] + 1:breakpoints[kk+1]]
-                fl_seg = fl[breakpoints[kk] + 1:breakpoints[kk+1]]
-                fit_fl_seg = fit_fl[breakpoints[kk] + 1:breakpoints[kk+1]]
-                peak = np.argmin(fl_seg)
-                delta_wl = wl_seg - wl_seg[peak]
-                plt.plot(delta_wl, 1 + fl_seg - 0.35 * kk, 'k')
-                plt.plot(delta_wl, 1 + fit_fl_seg - 0.35 * kk, 'r')
-            plt.xlabel(r'$\mathrm{\Delta \lambda}\ (\mathrm{\AA})$')
-            plt.ylabel('Normalized Flux')
-            plt.show()
-
-        return history
 
     def blackbody(self, wl, teff):
         wl = wl * 1e-10

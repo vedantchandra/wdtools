@@ -151,7 +151,7 @@ class SpecTools():
             return cropped_wl, fl_normalized
 
     def normalize_balmer(self, wl, fl, ivar = None, lines = ['alpha', 'beta', 'gamma', 'delta'], \
-                         skylines = True, make_plot = False, make_subplot = False, make_stackedplot = False, \
+                         skylines = False, make_plot = False, make_subplot = False, make_stackedplot = False, \
                              centroid_dict = dict(alpha = 6564.61, beta = 4862.68, gamma = 4341.68, delta = 4102.89, eps = 3971.20, h8 = 3890.12),
                                 distance_dict = dict(alpha = 300, beta = 200, gamma = 120, delta = 75, eps = 50, h8 = 25), sky_fill = np.nan):
         

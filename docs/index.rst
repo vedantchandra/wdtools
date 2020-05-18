@@ -25,6 +25,8 @@ Please don't hesitate to reach out for any bug reports, feature requests, or gen
    :maxdepth: 2
    :caption: Contents:
 
+   install
+
    gfp
 
    spectrum
