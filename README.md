@@ -5,6 +5,8 @@
 
 Package of tools to analyze white dwarf spectra. This is a work in progress, kindly contact the author for details regarding the current stage of development. 
 
+**Full Documentation:** https://wdtools.readthedocs.io/en/latest/. 
+
 To get started, clone the repository to your working folder and add this repository to your Python path. We recommend installing dependencies using ``conda`` and the provided ``wdtools.yaml`` file. 
 
 Example usage of wdtools to infer the temperature and surface gravity of a white dwarf from its spectrum:
@@ -28,8 +30,6 @@ teff, e_teff = medians[0], iqrs[0]
 logg, e_logg = medians[1], iqrs[1]
 rv, e_rv = medians[2], iqrs[2]
 ```
-
-**Full Documentation:** https://wdtools.readthedocs.io/en/latest/. 
 
 ## References
 
