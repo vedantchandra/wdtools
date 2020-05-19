@@ -3,16 +3,17 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - pip
-  - python==3.8
-  - keras
-  - emcee
-  - lmfit
-  - astropy
-  - scikit-learn
-  - sphinx
-  - sphinx-autoapi
-  - corner
-  - sphinxcontrib-bibtex
-  - nb_conda
+  - python=3.7
   - pandas
+  - lmfit
+  - emcee
+  - sphinx-autoapi
+  - astropy
+  - sphinx
+  - scikit-learn
+  - corner
+  - tensorflow
+  - jupyter
+  - prompt_toolkit
+  - ipython
+  - keras
