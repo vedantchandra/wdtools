@@ -1,6 +1,6 @@
 *rf_model*.p
 *.DS_Store
-*DB_
+*DB_*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

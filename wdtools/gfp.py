@@ -64,6 +64,8 @@ class GFP:
 
         self.res_ang = resolution
         self.resolution = {};
+        self.model = {};
+        self.lamgrid = {};
 
         self.H_DA = 128
         self.lamgrid_DA = pickle.load(open(dir_path + '/models/neural_gen/DA_lamgrid.p', 'rb'))
@@ -71,19 +73,23 @@ class GFP:
         self.model_DA.load_weights(dir_path + '/models/neural_gen/DA_normNN.h5')
         pix_per_a = len(self.lamgrid_DA) / (self.lamgrid_DA[-1] - self.lamgrid_DA[0])
         self.resolution['DA'] = resolution * pix_per_a
+        self.model['DA'] = self.model_DA
+        self.lamgrid['DA'] = self.lamgrid_DA
 
         if specclass == 'DB':
             print('DB models unfortunately under restricted access right now and unavailable in this package.')
 
-        # self.H_DB = 128
-        # self.lamgrid_DB = pickle.load(open(dir_path + '/models/neural_gen/DB_lamgrid.p', 'rb'))
-        # self.model_DB = self.generator(self.H_DB, len(self.lamgrid_DB))
-        # self.model_DB.load_weights(dir_path + '/models/neural_gen/DB_normNN.h5')
-        # pix_per_a = len(self.lamgrid_DB) / (self.lamgrid_DB[-1] - self.lamgrid_DB[0])
-        # self.resolution['DB'] = resolution * pix_per_a
-
-        self.model = {'DA': self.model_DA}
-        self.lamgrid = {'DA': self.lamgrid_DA}
+        try:
+            self.H_DB = 128
+            self.lamgrid_DB = pickle.load(open(dir_path + '/models/neural_gen/DB_lamgrid.p', 'rb'))
+            self.model_DB = self.generator(self.H_DB, len(self.lamgrid_DB))
+            self.model_DB.load_weights(dir_path + '/models/neural_gen/DB_normNN.h5')
+            pix_per_a = len(self.lamgrid_DB) / (self.lamgrid_DB[-1] - self.lamgrid_DB[0])
+            self.resolution['DB'] = resolution * pix_per_a
+            self.model['DB'] = self.model_DB
+            self.lamgrid['DB'] = self.lamgrid_DB
+        except:
+            print('DB models not loaded.')
 
         if '+' not in specclass:
             self.isbinary = False;
@@ -236,7 +242,7 @@ class GFP:
         if isinstance(specclass,str):
             specclass = [specclass, specclass]
 
-        bin_lamgrid = np.linspace(3500, 7000, 15000)
+        bin_lamgrid = np.linspace(3500, 7000, 14000)
 
         normfl_1 = self.synth_spectrum_sampler(self.lamgrid[specclass[0]], teff_1, logg_1, rv_1, specclass[0])
         func1 = interp1d(self.lamgrid[specclass[0]], normfl_1, fill_value = 1, bounds_error = False)
