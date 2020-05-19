@@ -18,6 +18,7 @@ import keras
 from scipy import optimize as opt
 from bisect import bisect_left
 import warnings
+import lmfit
 
 from .spectrum import SpecTools
 
@@ -71,15 +72,18 @@ class GFP:
         pix_per_a = len(self.lamgrid_DA) / (self.lamgrid_DA[-1] - self.lamgrid_DA[0])
         self.resolution['DA'] = resolution * pix_per_a
 
-        self.H_DB = 128
-        self.lamgrid_DB = pickle.load(open(dir_path + '/models/neural_gen/DB_lamgrid.p', 'rb'))
-        self.model_DB = self.generator(self.H_DB, len(self.lamgrid_DB))
-        self.model_DB.load_weights(dir_path + '/models/neural_gen/DB_normNN.h5')
-        pix_per_a = len(self.lamgrid_DB) / (self.lamgrid_DB[-1] - self.lamgrid_DB[0])
-        self.resolution['DB'] = resolution * pix_per_a
+        if specclass == 'DB':
+            print('DB models unfortunately under restricted access right now and unavailable in this package.')
 
-        self.model = {'DA': self.model_DA, 'DB': self.model_DB}
-        self.lamgrid = {'DA': self.lamgrid_DA, 'DB': self.lamgrid_DB}
+        # self.H_DB = 128
+        # self.lamgrid_DB = pickle.load(open(dir_path + '/models/neural_gen/DB_lamgrid.p', 'rb'))
+        # self.model_DB = self.generator(self.H_DB, len(self.lamgrid_DB))
+        # self.model_DB.load_weights(dir_path + '/models/neural_gen/DB_normNN.h5')
+        # pix_per_a = len(self.lamgrid_DB) / (self.lamgrid_DB[-1] - self.lamgrid_DB[0])
+        # self.resolution['DB'] = resolution * pix_per_a
+
+        self.model = {'DA': self.model_DA}
+        self.lamgrid = {'DA': self.lamgrid_DA}
 
         if '+' not in specclass:
             self.isbinary = False;
@@ -263,7 +267,7 @@ class GFP:
         
         return func(wl)
 
-    def fit_spectrum(self, wl, fl, ivar, nwalkers = 100, burn = 100, n_draws = 50, make_plot = True, threads = 1, \
+    def fit_spectrum(self, wl, fl, ivar = None, nwalkers = 100, burn = 100, n_draws = 50, make_plot = True, threads = 1, \
                     plot_trace = False, init = 'unif', prior_teff = None, mleburn = 50, savename = None, isbinary = None, mask_threshold = 100):
 
         """
@@ -283,8 +287,9 @@ class GFP:
         init : str, optional
             If 'unif', walkers are initialized uniformly in parameter space before the burn-in phase. If 'mle', there is a pre-burn phase with walkers initialized uniformly in 
             parameter space. The highest probability (lowest chi square) parameter set is taken as the MLE, and the main burn-in is initialized in a tight n-ball around this high
-            probablity region. If 'opt', the MLE is estimated in one shot using Nelder-Mead optimization and the burn-in is initialized in a tight n-ball around that value. Direct
-            optimization is susceptible to local minima and starting conditions. We recommend first using 'unif' to identify any multi-modality, and then 'mle' for the final fit.
+            probablity region. If 'opt', the MLE is estimated in one shot using Nelder-Mead optimization and the burn-in is initialized in a tight n-ball around that value. If 'de', differential 
+            evolution is used instead of Nelder-Mead. Direct optimization is susceptible to local minima and starting conditions. We recommend first using 'unif' to identify any multi-modality, 
+            and then 'mle' for the final fit.
         prior_teff : tuple, optional
             Tuple of (mean, sigma) to define a Gaussian prior on the effective temperature parameter. This is especially useful if there is strong prior knowledge of temperature 
             from photometry. If not provided, a flat prior is used.
@@ -317,8 +322,8 @@ class GFP:
         if isbinary is None:
             isbinary == self.isbinary
 
-        if ivar == 'infer':
-            _=warnings.warn('inferring ivar using beta-sigma method. the chi-square likelihood may not be exact, treat returned uncertainties with caution!', Warning)
+        if ivar is None:
+            print('no inverse variance array provided, inferring ivar using the beta-sigma method. the chi-square likelihood will not be exact; treat returned uncertainties with caution!')
             beq = pyasl.BSEqSamp()
             std, _ = beq.betaSigma(fl, 1, 1)
             ivar = np.repeat(1 / std**2, len(fl))
@@ -387,10 +392,33 @@ class GFP:
         if init == 'opt':
             print('finding optimal starting point...')
             nll = lambda *args: -lnprob(*args)
-            result = opt.minimize(nll, init_prms, method = 'Nelder-Mead')
+            result = opt.minimize(nll, init_prms, method = 'lm')
 
             for jj in range(ndim):
                 pos0[:,jj] = (result.x[jj] + 0.001*np.random.normal(size = nwalkers))
+
+        elif init == 'de':
+
+            print('finding optimal starting point with differential evolution...')
+            
+            def residual(parvals):
+                model = self.spectrum_sampler(wl, parvals['teff'], parvals['logg'], parvals['rv'])
+                nonan = (~np.isnan(model)) * (~np.isnan(fl)) * (~np.isnan(ivar))
+                diff = model[nonan] - fl[nonan]
+                chisq = np.sum(diff**2 * ivar[nonan])
+                return chisq
+
+            params = lmfit.Parameters()
+            params.add('teff', value = 12000, min = 6000, max = 40000)
+            params.add('logg', value = 8, min = 6.5, max = 9.5)
+            params.add('rv', value = 0, min = -1000, max = 1000)
+            fitter = lmfit.Minimizer(residual, params, nan_policy = 'omit')
+            res = fitter.minimize(method = 'differential_evolution')
+            result = [res.params['teff'].value, res.params['logg'].value, res.params['rv'].value]
+
+            for jj in range(ndim):
+                pos0[:,jj] = (result[jj] + 0.001*np.random.normal(size = nwalkers))
+
 
         elif init == 'unif':
             for jj in range(ndim):

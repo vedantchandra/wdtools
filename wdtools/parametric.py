@@ -133,7 +133,12 @@ class LineProfiles:
 		params['sigma'].set(min = 0, max=200, value=10, vary = True)
 		params['gamma'].set(value=10, min = 0, max=200, vary = True)
 
-		result = voigtfitter.fit(continuum_normalized, params, x = cropped_wl, nan_policy = 'omit', method=self.optimizer, fit_kws={'reduce_fcn':self.chisquare})
+		try:
+
+			result = voigtfitter.fit(continuum_normalized, params, x = cropped_wl, nan_policy = 'omit', method=self.optimizer, fit_kws={'reduce_fcn':self.chisquare})
+		except:
+			print('line profile fit failed! make sure the selected line is present on the provided spectrum')
+			raise
 
 		if make_plot:
 			plt.figure(figsize = (7,5), )
@@ -181,7 +186,6 @@ class LineProfiles:
 		except KeyboardInterrupt:
 			raise
 		except:
-			raise
 			print('profile fit failed! returning NaN...')
 			return np.repeat(np.nan, 18)
 

@@ -127,8 +127,17 @@ class SpecTools():
 
         cropped_wl = wl[crop1:crop2]
         cropped_fl = fl[crop1:crop2]
-        
-        res = self.cm.fit(cropped_fl, self.params, x = cropped_wl, nan_policy = 'omit')
+
+        cropped_fl = cropped_fl / np.nanmax(cropped_fl)
+
+        try:
+            res = self.cm.fit(cropped_fl, self.params, x = cropped_wl, nan_policy = 'omit')
+        except TypeError:
+            print('profile fit failed. ensure all lines passed to normalize_balmer are present on the spectrum!')
+            raise
+
+        if res.message != 'Fit succeeded.':
+            print('the line fit was ill-constrained. visually inspect the fit quality with make_plot = True')
         slope = res.params['l_slope']
         intercept = res.params['l_intercept']
         
