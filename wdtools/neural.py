@@ -16,132 +16,10 @@ from keras.layers import Dense, Input, Conv1D, Flatten, MaxPooling1D, Dropout
 from keras.models import Model
 from keras.regularizers import l2
 from keras.optimizers import Adamax
+from scipy.interpolate import interp1d
 #from astroNN.nn import layers as annlayers
 from sklearn.preprocessing import MinMaxScaler
 from .spectrum import SpecTools
-
-class ANN:
-	'''
-	Basic artificial neural network. 
-	'''
-
-	def __init__(self, n_input = 14, n_output = 2, n_hidden = 2, neurons = 10, activation = 'relu', output_activation = 'linear', regularization = 0,\
-		loss = 'mse', bayesian = False, dropout = 0.1, input_bounds = [[0,1]], output_bounds = [[0,1]], input_scale = None, output_scale = None, model = 'default'):
-
-		'''
-		
-		Args:
-			n_input (int): number of inputs
-			n_output (int): number of outputs
-			n_hidden (int): number of hiddden dense layers
-			neurons (int or list): number of neurons per hidden layers
-			activation (str): hidden layer activation function (keras format)
-			output_activation (str): output activation function (keras format)
-			regularization (float): l2 regularization hyperparameter
-			loss (str): loss function (keras format)
-			bayesian (bool): enable dropout variational inference
-			dropout (float): dropout fraction for bayesian inference
-			input_bounds (list): list of tuple bounds for each input
-			output_bounds (list): list of tuple bounds for each output
-			input_scale (str): use a built-in scaler for inputs
-			output_scale (str): use a built-in scaler for outputs
-			model (str): use a built-in preloaded model
-
-		'''
-
-		self.is_initialized = False
-		self.n_input = n_input
-		self.n_output = n_output
-		self.n_hidden = n_hidden
-		self.activation = activation
-		self.output_activation = output_activation
-		self.reg = regularization
-		self.neurons = neurons
-		self.loss = loss
-		self.dropout = dropout
-		self.bayesian = bayesian
-		self.scaler_isfit = False
-		self.input_bounds = np.array(input_bounds);
-		self.output_bounds = np.array(output_bounds);
-
-		if not isinstance(self.neurons,list):
-			self.neurons = np.repeat(self.neurons, self.n_hidden)
-
-		if model == 'default':
-			self.model = self.nn()
-			self.is_initialized = True
-
-		self.input_scaler = MinMaxScaler()
-		self.output_scaler = MinMaxScaler()
-		self.input_scaler.fit(self.input_bounds.T)
-		self.output_scaler.fit(self.output_bounds.T)
-
-		print('### Artificial Neural Network for Astrophysics (ANNA) ### \n')
-		print('\n')
-		print(self.model.summary())
-
-	def nn(self):
-		if len(self.neurons) != self.n_hidden:
-			print('neuron list inconsistent with number of layers')
-			raise
-		x = Input(shape=(self.n_input, ), name = 'Input')
-		y = Dense(self.neurons[0], activation = self.activation, kernel_regularizer = l2(self.reg), name = 'Dense_1')(x)
-		for ii in range(self.n_hidden - 1):
-			if self.bayesian:
-				y = Dropout(self.dropout)(y, training = True)
-			y = Dense(self.neurons[ii+1], activation = self.activation, kernel_regularizer = l2(self.reg), name = 'Dense_'+str(ii+2))(y)
-		if self.bayesian:
-			y = Dropout(self.dropout)(y, training = True)
-		out = Dense(self.n_output, activation = self.output_activation, name = 'Output')(y)
-
-		network = Model(inputs = x, outputs = out)
-		network.compile(optimizer = Adamax(), loss = self.loss)
-		return network
-
-	def train(self, x_data, y_data, model = 'default', n_epochs = 100, batchsize = 64, verbose = 0):
-		
-		if not self.scaler_isfit:
-			print('Warning! Assuming data is scaled. If not, use fit_scaler(X,Y), then train.')
-
-		x_data = self.input_scaler.transform(x_data)
-		y_data = self.output_scaler.transform(y_data)
-		h = self.model.fit(x_data, y_data, epochs = n_epochs, verbose = verbose, batch_size = batchsize)
-		return h
-
-	def eval(self, x_data, model = 'default', n_bootstrap = 25):
-		if model == 'default':
-			try:
-				model = self.model
-			except:
-				print('model not trained! use train() or explicitly pass a model to eval()')
-				raise
-		x_data = self.input_scaler.transform(x_data)
-		
-		if self.bayesian:
-			predictions = np.asarray([self.output_scaler.inverse_transform(self.model.predict(x_data)) for i in range(n_bootstrap)])
-			means = np.mean(predictions,0)
-			stds = np.std(predictions,0)
-			results = np.empty((means.shape[0], means.shape[1] + stds.shape[1]), dtype = means.dtype)
-			results[:,0::2] = means
-			results[:,1::2] = stds
-			return results
-
-		elif not self.bayesian:
-			return self.output_scaler.inverse_transform(self.model.predict(x_data))
-
-	def fit_scaler(self, x_data, y_data):
-		self.input_bounds = np.asarray([np.min(x_data,0),np.max(x_data,0)]).T
-		self.output_bounds = np.asarray([np.min(y_data,0),np.max(y_data,0)]).T
-
-		self.input_scaler.fit(self.input_bounds.T)
-		self.output_scaler.fit(self.output_bounds.T)
-		print('new bounds established!')
-		self.scaler_isfit = True
-		return None
-
-	def get_params(self):
-		print(inspect.signature(self.__init__))
-		return None
 
 class CNN:
 	'''
@@ -193,7 +71,7 @@ class CNN:
 		self.n_filters = n_filters
 		self.filter_size = filter_size
 		self.pool_size = pool_size
-
+		self.lamgrid = np.linspace(4000, 7000, 3000)
 		self.input_bounds = input_bounds
 		self.output_bounds = output_bounds
 		self.scalewarningflag = 0
@@ -213,28 +91,23 @@ class CNN:
 			self.is_initialized = True
 
 		if model == 'bayesnn':
-			self.n_input = 1186
+			self.n_input = 3000
 			self.n_output = 2
 			self.n_hidden = 2
-			self.neurons = [32,32]
+			self.neurons = [196,86]
+			self.n_filters = [2,4]
+			self.n_conv = 2
+
+			self.pool_size = 4
+			self.filter_size = 8
 			self.bayesian = True
 			self.output_bounds = [[2500, 100000], [5, 10]];
 			self.scale_output = True
 			self.scale_input = False
 			self.output_scaler.fit(np.asarray(self.output_bounds).T)
-			self.n_conv = 2
 			self.model = self.nn()
 			self.is_initialized = True
-			self.load('bayesnn')
 			self.scalewarningflag = False
-
-
-
-		print('### Convolutional Neural Network for Astrophysics ### \n')
-		print(CNN.__doc__)
-		print('\n')
-		print(self.model.summary())
-
 	def nn(self):
 
 		if len(self.neurons) != self.n_hidden:
@@ -283,7 +156,8 @@ class CNN:
 		h = self.model.fit(x_data, y_data, epochs = n_epochs, verbose = verbose, batch_size = batchsize)
 		return h
 
-	def eval(self, x_data, model = 'default', n_bootstrap = 25):
+	def eval_data(self, x_data, model = 'default', n_bootstrap = 100):
+
 		if model == 'default':
 			try:
 				model = self.model
@@ -313,6 +187,11 @@ class CNN:
 			elif not self.scale_output:
 				return self.model.predict(x_data)
 
+	def labels_from_spectrum(self, wl, flux):
+		func = interp1d(wl, flux)
+		interp_flux = func(self.lamgrid)
+		return self.eval_data(interp_flux.reshape(1,-1))[0]
+
 	def fit_scaler(self, x_data, y_data):
 		self.input_bounds = np.asarray([np.min(x_data,0),np.max(x_data,0)]).T
 		self.output_bounds = np.asarray([np.min(y_data,0),np.max(y_data,0)]).T
@@ -336,3 +215,42 @@ class CNN:
 	def args(self):
 		print(self.__init__.__doc__)
 		return None
+
+	def label_sc(self, label_array):
+
+		"""
+		Label scaler to transform Teff and logg to [0,1] interval based on preset bounds. 
+
+		Parameters
+		---------
+		label_array : array
+			Unscaled array with Teff in the first column and logg in the second column
+		Returns
+		-------
+			array
+				Scaled array
+		"""
+		teffs = label_array[:, 0];
+		loggs = label_array[:, 1];
+		teffs = (teffs - 2500) / (100000 - 2500)
+		loggs = (loggs - 5) / (10 - 5)
+		return np.vstack((teffs, loggs)).T
+
+	def inv_label_sc(self, label_array):
+		"""
+		Inverse label scaler to transform Teff and logg from [0,1] to original scale based on preset bounds. 
+
+		Parameters
+		---------
+		label_array : array
+			Scaled array with Teff in the first column and logg in the second column
+		Returns
+		-------
+			array
+				Unscaled array
+		"""
+		teffs = label_array[:, 0];
+		loggs = label_array[:, 1];
+		teffs = (teffs * (100000 - 2500)) + 2500
+		loggs = (loggs * (10 - 5)) + 5
+		return np.vstack((teffs, loggs)).T

@@ -128,7 +128,8 @@ class SpecTools():
         cropped_wl = wl[crop1:crop2]
         cropped_fl = fl[crop1:crop2]
 
-        cropped_fl = cropped_fl / np.nanmax(cropped_fl)
+        #cropped_fl = cropped_fl / np.nanmax(cropped_fl)
+
 
         try:
             res = self.cm.fit(cropped_fl, self.params, x = cropped_wl, nan_policy = 'omit')
@@ -242,6 +243,9 @@ class SpecTools():
                 peak = int(len(wl_seg)/2)
                 delta_wl = wl_seg - wl_seg[peak]
                 plt.plot(delta_wl, 1 + fl_seg - 0.35 * kk, 'k')
+
+            plt.xlabel(r'$\mathrm{\Delta \lambda}\ (\mathrm{\AA})$')
+            plt.ylabel('Normalized Flux')
             plt.show()
 
         if ivar is not None:

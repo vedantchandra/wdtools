@@ -141,7 +141,7 @@ class LineProfiles:
 			raise
 
 		if make_plot:
-			plt.figure(figsize = (7,5), )
+			plt.figure(figsize = (6,3), )
 			plt.plot(cropped_wl,1-continuum_normalized, 'k')
 			plt.plot(cropped_wl,1-voigtfitter.eval(result.params, x = cropped_wl),'r')
 			plt.xlabel('Wavelength ($\mathrm{\AA}$)')

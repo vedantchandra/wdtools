@@ -1,6 +1,7 @@
 from wdtools.gfp import GFP
 from wdtools.spectrum import SpecTools
 from wdtools.parametric import LineProfiles
+from wdtools.neural import CNN
 
 __bibtex__ = __citation__ = """@ARTICLE{wdtools,
        author = {{Chandra}, Vedant and {Hwang}, Hsiang-Chih and

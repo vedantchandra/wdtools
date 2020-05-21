@@ -273,7 +273,7 @@ class GFP:
         
         return func(wl)
 
-    def fit_spectrum(self, wl, fl, ivar = None, nwalkers = 100, burn = 100, n_draws = 50, make_plot = True, threads = 1, \
+    def fit_spectrum(self, wl, fl, ivar = None, nwalkers = 100, burn = 100, ndraws = 50, make_plot = True, threads = 1, \
                     plot_trace = False, init = 'unif', prior_teff = None, mleburn = 50, savename = None, isbinary = None, mask_threshold = 100):
 
         """
@@ -304,8 +304,8 @@ class GFP:
         burn : int, optional
             Number of steps to run and discard at the start of sampling to 'burn-in' the posterior parameter distribution. If intitializing from 
             a high-probability point, keep this value high to avoid under-estimating uncertainties. 
-        n_draws : int, optional
-            Number of 'production' steps after the burn-in. The final number of posterior samples will be nwalkers * n_draws. 
+        ndraws : int, optional
+            Number of 'production' steps after the burn-in. The final number of posterior samples will be nwalkers * ndraws. 
         mleburn : int, optional
             Number of steps for the pre-burn phase to estimate the MLE. 
         threads : int, optional
@@ -425,7 +425,6 @@ class GFP:
             for jj in range(ndim):
                 pos0[:,jj] = (result[jj] + 0.001*np.random.normal(size = nwalkers))
 
-
         elif init == 'unif':
             for jj in range(ndim):
                 pos0[:,jj] = np.random.uniform(prior_lows[jj], prior_highs[jj], nwalkers)
@@ -448,7 +447,7 @@ class GFP:
 
         sampler.reset()
 
-        b = sampler.run_mcmc(b.coords, n_draws, progress = True)
+        b = sampler.run_mcmc(b.coords, ndraws, progress = True)
 
         if plot_trace:
             f, axs = plt.subplots(ndim, 1, figsize = (10, 6))
@@ -469,9 +468,10 @@ class GFP:
 
         if make_plot:
             #fig,ax = plt.subplots(ndim, ndim, figsize = (15,15))
+            plt.rcParams.update({'font.size': 12})
             f = corner.corner(sampler.flatchain, labels = param_names, \
-                  show_titles = True, title_kwargs = dict(fontsize = 16),\
-                     label_kwargs = dict(fontsize =  16), quantiles = (0.16, 0.5, 0.84))
+                     label_kwargs = dict(fontsize =  16), quantiles = (0.16, 0.5, 0.84),
+                     )
             plt.tight_layout()
             if savename is not None:
                 plt.savefig(savename + '_corner.pdf', bbox_inches = 'tight')
