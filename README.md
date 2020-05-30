@@ -16,7 +16,7 @@ Example usage of wdtools to infer the temperature and surface gravity of a white
 import sys
 import numpy as np
 from scipy import stats
-sys.path.append('/User/yourname/GitHub/wdtools/')
+sys.path.append('~/GitHub/wdtools/')
 
 import wdtools
 
@@ -46,7 +46,7 @@ Tremblay & Bergeron (2009) [[ADS](https://ui.adsabs.harvard.edu/abs/2009ApJ...69
 
 Tassoul et al. (1990) [[ADS](https://ui.adsabs.harvard.edu/abs/1990ApJS...72..335T/abstract)]
 
-The parametric random forest and neural network models are trained using labelled spectra from the Sloan Digital Sky Survey and Tremblay et al. (2019):
+The random forest regression model is trained using labelled spectra from the Sloan Digital Sky Survey and Tremblay et al. (2019):
 
 Tremblay et al. (2019) [[ADS](https://ui.adsabs.harvard.edu/abs/2019MNRAS.482.5222T/abstract)]
 
