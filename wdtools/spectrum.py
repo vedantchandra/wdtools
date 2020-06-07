@@ -93,7 +93,7 @@ class SpecTools():
         elif ivar is None:
             return wl[valid], norm[valid]
 
-    def normalize_line(self, wl, fl, ivar, centroid, distance, make_plot = False):
+    def normalize_line(self, wl, fl, ivar, centroid, distance, make_plot = False, return_centre = False):
 
         '''
         Continuum-normalization of a single absorption line by fitting a linear model added to a Voigt profile to the spectrum, and dividing out the linear model. 
@@ -157,6 +157,8 @@ class SpecTools():
             cropped_ivar = ivar[crop1:crop2]
             ivar_normalized = cropped_ivar * continuum**2
             return cropped_wl, fl_normalized, ivar_normalized
+        elif return_centre:
+            return cropped_wl, fl_normalized, res.params['v_center']
         else:
             return cropped_wl, fl_normalized
 
@@ -220,7 +222,8 @@ class SpecTools():
             else:
                 wl_segment, fl_segment = self.normalize_line(wl, fl, None, centroid_dict[line],\
                                                         distance_dict[line], make_plot = make_subplot)
-                plt.show()
+                if make_subplot:
+                    plt.show()
                 fl_normalized = np.append(fl_segment, fl_normalized)
                 wl_normalized = np.append(wl_segment, wl_normalized)
                 

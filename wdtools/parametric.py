@@ -214,7 +214,7 @@ class LineProfiles:
 		
 		for i in range(self.n_bootstrap):
 			idxarray = np.arange(len(x_data))
-			sampleidx = np.random.choice(idxarray, size = int(len(idxarray)*0.67), replace = True, p = weights)
+			sampleidx = np.random.choice(idxarray, size = len(idxarray), replace = True, p = weights)
 			X_sample, t_sample = x_data[sampleidx], y_data[sampleidx]
 			rf = RandomForestRegressor(n_estimators = self.n_trees)
 			rf.fit(X_sample,t_sample)
@@ -224,7 +224,7 @@ class LineProfiles:
 
 		return None
 
-	def labels_from_parameters(self, balmer_parameters):
+	def labels_from_parameters(self, balmer_parameters, quantile = 0.67):
 		'''
 		Predicts stellar labels from Balmer line parameters.
 		
@@ -248,18 +248,32 @@ class LineProfiles:
 		
 		if np.isnan(balmer_parameters).any():
 			print('NaNs detected! Aborting...')
-			return np.repeat(np.nan, 2)
+			return np.repeat(np.nan, 4)
 	
 
+		T = [];
 		predictions = [];
-		for bootstrap_model in self.bootstrap_models:
-			prediction = bootstrap_model.predict(balmer_parameters)[0]
-			predictions.append(prediction)
-		predictions = np.asarray(predictions)
-		mean_prediction = np.mean(predictions,0)
-		std_prediction = np.std(predictions,0)
-		labels = np.asarray([mean_prediction[0], std_prediction[0],mean_prediction[1], std_prediction[1]])
+
+		for kk in range(self.n_bootstrap):
+		    
+		    ys = np.array([self.bootstrap_models[kk].estimators_[jj].predict(balmer_parameters)[0] for jj in range(self.n_trees)])
+		    predictions.append(np.mean(ys, 0))
+		    tau = np.nanmax(np.sqrt(((ys - np.nanmean(ys, 0))**2 / ((np.nanvar(ys, 0)) + 1e-10))), axis = 1)    
+		    T.extend(tau)
 			
+		predictions = np.asarray(predictions)
+		T = np.asarray(T)
+
+		T_sorted = np.sort(T)
+		p = 1. * np.arange(len(T)) / (len(T) - 1)
+
+		tauhat = np.quantile(T_sorted, quantile)
+		onesigma = tauhat * np.std(predictions, 0)
+
+		medians = np.median(predictions, 0)
+
+		labels = np.asarray([medians[0], onesigma[0], medians[1], onesigma[1]])
+
 		return labels
 
 
@@ -270,7 +284,7 @@ class LineProfiles:
 	def load(self, modelname = 'wd'):
 		self.bootstrap_models = pickle.load(open(dir_path+'/models/'+modelname+'.p', 'rb'))
 
-	def labels_from_spectrum(self, wl, flux, make_plot = False):
+	def labels_from_spectrum(self, wl, flux, make_plot = False, quantile = 0.67):
 		'''
 		Wrapper function that directly predicts stellar labels from a provided spectrum. Performs continuum-normalization, fits Balmer profiles, and uses the bootstrap ensemble of random forests to infer labels. 
 		
@@ -289,7 +303,7 @@ class LineProfiles:
 
 		balmer_parameters = self.fit_balmer(wl,flux, make_plot = make_plot) 
 
-		predictions = self.labels_from_parameters(balmer_parameters) # Deploy instantiated model. Defaults to random forest. 
+		predictions = self.labels_from_parameters(balmer_parameters, quantile) # Deploy instantiated model. Defaults to ensemble of random forests. 
 
 
 		return predictions

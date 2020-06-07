@@ -494,7 +494,6 @@ class GFP:
                 plt.ylabel('Normalized Flux')
                 if savename is not None:
                     plt.savefig(savename + '_fit.pdf', bbox_inches = 'tight')
-                plt.show()
             else:
                 plt.figure(figsize = (10,5))
                 plt.plot(wl, fl, 'k')
