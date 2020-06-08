@@ -24,10 +24,10 @@ class LineProfiles:
 	Line profiles are fit using the LMFIT package via chi^2 minimization. 
 	'''
 
-	def __init__(self, verbose = False, plot_profiles = False, n_trees = 25, n_bootstrap = 25, lines = ['alpha', 'beta', 'gamma']):
+	def __init__(self, verbose = False, plot_profiles = False, n_trees = 25, n_bootstrap = 25, lines = ['alpha', 'beta', 'gamma', 'delta'], optimizer = 'leastsq'):
 
 		self.verbose = verbose
-		self.optimizer = 'lm'
+		self.optimizer = optimizer
 		self.halpha = 6564.61
 		self.hbeta = 4862.68
 		self.hgamma = 4341.68
@@ -135,7 +135,7 @@ class LineProfiles:
 
 		try:
 
-			result = voigtfitter.fit(continuum_normalized, params, x = cropped_wl, nan_policy = 'omit', method=self.optimizer, fit_kws={'reduce_fcn':self.chisquare})
+			result = voigtfitter.fit(continuum_normalized, params, x = cropped_wl, nan_policy = 'omit', method=self.optimizer)
 		except:
 			print('line profile fit failed! make sure the selected line is present on the provided spectrum')
 			raise
@@ -178,16 +178,17 @@ class LineProfiles:
 		'''
 		colnames = [];
 		parameters = [];
-		try:
-			for linename in self.lines:
+		for linename in self.lines:
+			colnames.extend([linename[0] + '_' + fparam for fparam in self.fit_params])
+			try:
 				line_parameters = np.asarray(self.fit_line(wl, flux, self.linedict[linename], self.window_dict[linename], self.edge_dict[linename], make_plot = make_plot).params)
-				colnames.extend([linename[0] + '_' + fparam for fparam in self.fit_params])
 				parameters.extend(line_parameters)
-		except KeyboardInterrupt:
-			raise
-		except:
-			print('profile fit failed! returning NaN...')
-			return np.repeat(np.nan, 18)
+			except KeyboardInterrupt:
+				raise
+			except:
+				print('profile fit failed! returning NaN...')
+				parameters.extend(np.repeat(np.nan, 6))
+
 
 		balmer_parameters = pd.DataFrame([parameters], columns = colnames)
 

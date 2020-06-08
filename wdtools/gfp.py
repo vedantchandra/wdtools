@@ -414,13 +414,29 @@ class GFP:
                 chisq = np.sum(diff**2 * ivar[nonan])
                 return chisq
 
+            ## Cold Solution
+
             params = lmfit.Parameters()
-            params.add('teff', value = 12000, min = 6000, max = 40000)
+            params.add('teff', value = 10000, min = 6000, max = 15000)
             params.add('logg', value = 8, min = 6.5, max = 9.5)
             params.add('rv', value = 0, min = -1000, max = 1000)
             fitter = lmfit.Minimizer(residual, params, nan_policy = 'omit')
             res = fitter.minimize(method = 'differential_evolution')
-            result = [res.params['teff'].value, res.params['logg'].value, res.params['rv'].value]
+            cold_result = [res.params['teff'].value, res.params['logg'].value, res.params['rv'].value]
+            cold_chi = -2 * lnprob(cold_result)
+
+            ## Hot solution
+
+            params['teff'].set(value = 25000, min = 15000, max = 40000)
+            fitter = lmfit.Minimizer(residual, params, nan_policy = 'omit')
+            res = fitter.minimize(method = 'differential_evolution')
+            hot_result = [res.params['teff'].value, res.params['logg'].value, res.params['rv'].value]
+            hot_chi = -2 * lnprob(hot_result)
+
+            if cold_chi <= hot_chi:
+                result = cold_result
+            elif cold_chi > hot_chi:
+                result = hot_result
 
             for jj in range(ndim):
                 pos0[:,jj] = (result[jj] + 0.001*np.random.normal(size = nwalkers))

@@ -85,13 +85,11 @@ class SpecTools():
         # plt.show()
         norm = fl/scipy.interpolate.splev(wl, spl)
 
-        valid = (norm > croprange[0]) * (norm < croprange[1])
-
         if ivar is not None:
             ivar_norm = ivar * scipy.interpolate.splev(wl, spl)**2
-            return wl[valid], norm[valid], ivar_norm[valid]
+            return wl, norm, ivar_norm
         elif ivar is None:
-            return wl[valid], norm[valid]
+            return wl, norm
 
     def normalize_line(self, wl, fl, ivar, centroid, distance, make_plot = False, return_centre = False):
 
@@ -135,7 +133,7 @@ class SpecTools():
             res = self.cm.fit(cropped_fl, self.params, x = cropped_wl, nan_policy = 'omit')
         except TypeError:
             print('profile fit failed. ensure all lines passed to normalize_balmer are present on the spectrum!')
-            raise
+            raise Exception('profile fit failed. ensure all lines passed to normalize_balmer are present on the spectrum!')
 
         if res.message != 'Fit succeeded.':
             print('the line fit was ill-constrained. visually inspect the fit quality with make_plot = True')
@@ -305,7 +303,7 @@ class SpecTools():
         return np.sum(residual**2)
 
     def find_centroid(self, wl, flux, centroid, half_window = 25, window_step = 2, n_fit = 12, make_plot = False, \
-                 pltname = ''):
+                 pltname = '', debug = False):
 
         '''
         Statistical inference of spectral redshift by iteratively fitting Voigt profiles to cropped windows around the line centroid. 
@@ -354,7 +352,7 @@ class SpecTools():
         params = linemodel.make_params()
         params['amplitude'].set(value = 2)
         params['center'].set(value = centroid)
-        params['sigma'].set(value=2)
+        params['sigma'].set(value=5)
         centres = [];
         errors = [];
         
@@ -364,10 +362,19 @@ class SpecTools():
             plt.plot(cropped_wl,contcorr,'k')
             #plt.plot(cropped_wl, 1-linemodel.eval(params, x = cropped_wl))
         
-        crop1 = bisect_left(cropped_wl,centroid - 15)
-        crop2 = bisect_left(cropped_wl,centroid + 15)
+        crop1 = bisect_left(cropped_wl,centroid - half_window)
+        crop2 = bisect_left(cropped_wl,centroid + half_window)
         init_result = linemodel.fit(1-contcorr[crop1:crop2],params,x = cropped_wl[crop1:crop2],\
-                            nan_policy = 'omit',method='lm')
+                            nan_policy = 'omit', method='nelder')
+
+        if debug:
+            plt.figure()
+            plt.plot(cropped_wl[crop1:crop2], 1-contcorr[crop1:crop2])
+            plt.plot(cropped_wl[crop1:crop2], linemodel.eval(params, x = cropped_wl[crop1:crop2]))
+            plt.plot(cropped_wl[crop1:crop2], linemodel.eval(init_result.params, x = cropped_wl[crop1:crop2]))
+            plt.show()
+
+        #plt.plot(cropped_wl, init_result.eval(init_result.params, x = cropped_wl))
         
         adaptive_centroid = init_result.params['center'].value
         
@@ -375,14 +382,14 @@ class SpecTools():
             
             crop1 = bisect_left(cropped_wl, adaptive_centroid - half_window - ii*window_step)
             crop2 = bisect_left(cropped_wl, adaptive_centroid + half_window + ii*window_step)
-            
             try:
+
                 result = linemodel.fit(1-contcorr[crop1:crop2],params,x = cropped_wl[crop1:crop2],\
-                            nan_policy = 'omit')
+                            nan_policy = 'omit', method = 'lm')
                 if np.abs(result.params['center'].value - adaptive_centroid) > 5:
                     continue
             except ValueError:
-    #             print('one fit failed. skipping...')
+                print('one fit failed. skipping...')
                 continue
                 
             if ii != 0:
@@ -391,18 +398,22 @@ class SpecTools():
             
             adaptive_centroid = result.params['center'].value
             
-    #         print(len(cropped_wl[crop1:crop2]))
+    #        print(len(cropped_wl[crop1:crop2]))
             if make_plot:
                 xgrid = np.linspace(cropped_wl[crop1:crop2][0], cropped_wl[crop1:crop2][-1], 1000)
                 
                 plt.plot(xgrid,1-linemodel.eval(result.params, x = xgrid),\
                          'r', linewidth = 1, alpha = 0.7)
     #            plt.plot(cropped_wl[crop1:crop2],1-linemodel.eval(params,x=cropped_wl[crop1:crop2]),'k--')
-        
         mean_centre = np.mean(centres)
         sigma_sample = np.std(centres)
+
+        if None in errors or np.nan in errors:
+            return mean_centre, np.nan, sigma_sample
+
         sigma_propagated = np.median(errors)
         total_sigma = np.sqrt(sigma_propagated**2 + sigma_sample**2) 
+
         
         if make_plot:
     #         gap = (50*1e-5)*centroid
@@ -415,16 +426,14 @@ class SpecTools():
             plt.axvline(centroid, color = 'k', linestyle = '--')
             plt.axvline(mean_centre, color = 'r', linestyle = '--')
             plt.tick_params(bottom=True, top=True, left=True, right=True)
-            plt.text(0.65, 0.1, '$\mathrm{v_r}$ = %i ± %i km/s'\
-                     %(speed_light*1e-3*(mean_centre - centroid)/centroid, speed_light*1e-3*(sigma_sample/centroid)),\
-                    fontsize = 22, transform = plt.gca().transAxes)
+            # plt.text(0.65, 0.1, '$\mathrm{v_r}$ = %i ± %i km/s'\
+            #          %(speed_light*1e-3*(mean_centre - centroid)/centroid, speed_light*1e-3*(sigma_sample/centroid)),\
+            #         fontsize = 22, transform = plt.gca().transAxes)
             #plt.xlim(adaptive_centroid - 10, adaptive_centroid + 10)
             plt.minorticks_on()
             plt.tick_params(which='major', length=10, width=1, direction='in', top = True, right = True)
             plt.tick_params(which='minor', length=5, width=1, direction='in', top = True, right = True)
             plt.tight_layout()
-        if None in errors or np.nan in errors:
-            return mean_centre, np.nan, sigma_sample
             #print(np.isnan(np.array(errors)))
             
         return mean_centre, sigma_propagated, sigma_sample
