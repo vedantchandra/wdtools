@@ -290,12 +290,11 @@ class GFP:
             Array of observed inverse-variance for uncertainty estimation. If this is not available, use `ivar = 'infer'` to infer a constant inverse variance mask using a second-order
             beta-sigma algorithm. In this case, since the errors are approximated, the chi-square likelihood may be inexact - treat returned uncertainties with caution. Spectra without
             good noise information may be better suited for `gfp.fit_spectrum_abc`, which performs likelihood-free inference.
-        init : str, optional
+        init : str, optional {'de', 'nm', 'unif', 'mle'}
+            If 'de', the differential evolution algorithm is used to maximize the likelihood before MCMC sampling. It tries both hot and cold solutions, and choosing the one with the lowest chi^2.
             If 'unif', walkers are initialized uniformly in parameter space before the burn-in phase. If 'mle', there is a pre-burn phase with walkers initialized uniformly in 
             parameter space. The highest probability (lowest chi square) parameter set is taken as the MLE, and the main burn-in is initialized in a tight n-ball around this high
-            probablity region. If 'opt', the MLE is estimated in one shot using Nelder-Mead optimization and the burn-in is initialized in a tight n-ball around that value. If 'de', differential 
-            evolution is used instead of Nelder-Mead. Direct optimization is susceptible to local minima and starting conditions. We recommend first using 'unif' to identify any multi-modality, 
-            and then 'mle' for the final fit.
+            probablity region. For most applications, we recommend using 'de'.
         prior_teff : tuple, optional
             Tuple of (mean, sigma) to define a Gaussian prior on the effective temperature parameter. This is especially useful if there is strong prior knowledge of temperature 
             from photometry. If not provided, a flat prior is used.
@@ -394,14 +393,6 @@ class GFP:
         pos0 = np.zeros((nwalkers,ndim))
 
         sampler = emcee.EnsembleSampler(nwalkers,ndim,lnprob,threads = threads)
-
-        if init == 'opt':
-            print('finding optimal starting point...')
-            nll = lambda *args: -lnprob(*args)
-            result = opt.minimize(nll, init_prms, method = 'lm')
-
-            for jj in range(ndim):
-                pos0[:,jj] = (result.x[jj] + 0.001*np.random.normal(size = nwalkers))
 
         elif init == 'de':
 
