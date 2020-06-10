@@ -394,7 +394,7 @@ class GFP:
 
         sampler = emcee.EnsembleSampler(nwalkers,ndim,lnprob,threads = threads)
 
-        elif init == 'de':
+        if init == 'de':
 
             print('finding optimal starting point with differential evolution...')
             
