@@ -12,3 +12,4 @@ sphinx-autoapi
 tensorflow
 lmfit
 scikit-learn
+nbsphinx
