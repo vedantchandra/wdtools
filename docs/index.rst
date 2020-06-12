@@ -32,3 +32,5 @@ Please don't hesitate to reach out for any bug reports, feature requests, or gen
    spectrum
 
    parametric
+
+   examples/1_fitting_wd_spectra.ipynb

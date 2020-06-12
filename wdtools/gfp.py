@@ -467,6 +467,8 @@ class GFP:
         lnprobs = sampler.get_log_prob(flat = True)
         medians = np.median(sampler.flatchain, 0)
         mle = sampler.flatchain[np.argmax(lnprobs)]
+        redchi = -2 * np.max(lnprobs) / (len(wl) - 3)
+        stds = np.std(sampler.flatchain, 0)
 
         if isbinary:
             fit_fl = self.binary_sampler(wl, *mle)
@@ -514,8 +516,7 @@ class GFP:
                     plt.savefig(savename + '_fit.pdf', bbox_inches = 'tight')
                 plt.show()
 
-        return sampler
-
+        return mle, stds, redchi
 
     def blackbody(self, wl, teff):
         wl = wl * 1e-10
