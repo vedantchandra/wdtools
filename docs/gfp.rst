@@ -18,14 +18,9 @@ Say we have an un-normalized DA spectrum from the Sloan Digital Sky Survey (SDSS
    gfp = wdtools.GFP(resolution = 3, specclass = 'DA')
 
    wl_norm, flux_norm, ivar_norm = sp.normalize_balmer(wl, flux, ivar = ivar)
-   sampler = gfp.fit_spectrum(wl_norm, flux_norm, ivar_norm, init = 'de', make_plot = True)
+   labels, e_labels, redchi = gfp.fit_spectrum(wl_norm, flux_norm, ivar_norm, init = 'de', make_plot = True)
 
-   medians = np.median(sampler.flatchain, axis = 0)
-   teff = medians[0] # Kelvin
-   logg = medians[1] # log[cm/s^2]
-   rv = medians[2] # km/s
-
-The returned `sampler` object is an emcee sampler instance, from which posterior samples can be obtained using ``sampler.flatchain``, and the chi squared value of each posterior sample can be obtained with ``chis = - 2 * sampler.get_log_probs()``. 
+``label`` and ``e_labels`` respectively are 3-arrays of the fitted effective temperature, log surface gravity, and radial velocity along with respective uncertainties. ``redchi`` is the reduced chi-square statistic, which can be used as a rough estimate of the goodness-of-fit. More details are in our paper. 
 
 .. bibliography:: bib.bib
    :style: plain
