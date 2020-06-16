@@ -20,7 +20,11 @@ from bisect import bisect_left
 import warnings
 import lmfit
 
-from .spectrum import SpecTools
+path = os.path.abspath(__file__)
+dir_path = os.path.dirname(path)
+sys.path.append(dir_path)
+
+from spectrum import SpecTools
 
 interp1d = interpolate.interp1d
 Table = table.Table
@@ -33,8 +37,7 @@ planck_h = 6.62607004e-34
 speed_light = 299792458
 k_B = 1.38064852e-23
 
-path = os.path.abspath(__file__)
-dir_path = os.path.dirname(path)
+
 plt.rcParams.update({'font.size': 16})
 
 def find_nearest(array, value):
@@ -274,7 +277,8 @@ class GFP:
         return func(wl)
 
     def fit_spectrum(self, wl, fl, ivar = None, nwalkers = 100, burn = 100, ndraws = 50, make_plot = True, threads = 1, \
-                    plot_trace = False, init = 'de', prior_teff = None, mleburn = 50, savename = None, isbinary = None, mask_threshold = 100):
+                    plot_trace = False, init = 'de', prior_teff = None, mleburn = 50, savename = None, isbinary = None, mask_threshold = 100,
+                    normalize_DA = False, lines = ['alpha', 'beta', 'gamma', 'delta']):
 
         """
         Main fitting routine, takes a continuum-normalized spectrum and fits it with MCMC to recover steller labels. 
@@ -326,6 +330,13 @@ class GFP:
 
         if isbinary is None:
             isbinary == self.isbinary
+
+        if normalize_DA == True:
+            sp = SpecTools()
+            if ivar is None:
+                wl, fl = sp.normalize_balmer(wl, fl, ivar = None, lines = lines)
+            else:
+                wl, fl, ivar = sp.normalize_balmer(wl, fl, ivar, lines = lines)
 
         if ivar is None:
             print('no inverse variance array provided, inferring ivar using the beta-sigma method. the chi-square likelihood will not be exact; treat returned uncertainties with caution!')
@@ -469,6 +480,11 @@ class GFP:
         mle = sampler.flatchain[np.argmax(lnprobs)]
         redchi = -2 * np.max(lnprobs) / (len(wl) - 3)
         stds = np.std(sampler.flatchain, 0)
+        
+        if mle[0] < 7000 or mle[0] > 38000:
+            print('temperature is near bound of the model grid! exercise caution with this result')
+        if mle[1] < 6.7 or mle[1] > 9.3:
+            print('logg is near bound of the model grid! exercise caution with this result')
 
         if isbinary:
             fit_fl = self.binary_sampler(wl, *mle)
@@ -523,3 +539,14 @@ class GFP:
         num = 2 * planck_h * speed_light**2
         denom = wl**5 * (np.exp((planck_h * speed_light) / (wl * k_B * teff)) - 1)
         return num/denom
+    
+if __name__ == '__main__':
+    
+    gfp = GFP(resolution = 3)
+    wl = np.linspace(4000, 8000, 4000)
+    fl = gfp.spectrum_sampler(wl, 6500, 6.58, 0)
+    
+    plt.plot(wl, fl)
+    
+    result = gfp.fit_spectrum(wl, fl, init = 'de', burn = 1, ndraws = 1, 
+                              normalize_DA = True)
