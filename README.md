@@ -4,7 +4,7 @@
 ![GitHub](https://img.shields.io/github/license/vedantchandra/wdtools)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.3828007.svg)](https://doi.org/10.5281/zenodo.3828007)
 
-Package of tools to analyze white dwarf spectra. This is a work in progress, kindly contact the author for details regarding the current stage of development. 
+Package of tools to analyze white dwarf spectra. 
 
 **Full Documentation:** https://wdtools.readthedocs.io/en/latest/. 
 
