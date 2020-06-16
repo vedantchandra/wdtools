@@ -22,14 +22,11 @@ import wdtools
 
 gfp = wdtools.GFP(resolution = 3)
 
-result = gfp.fit_spectrum(wl_norm, flux_norm, ivar_norm, init = 'de', make_plot = True)
+labels, e_labels, redchi = gfp.fit_spectrum(wl_norm, flux_norm, ivar_norm, init = 'de', make_plot = True)
 
-medians = np.median(result.flatchain, axis = 0)
-iqrs = np.stats.iqr(result.flatchain, axis = 0, rng = (0.16, 0.84))
-
-teff, e_teff = medians[0], iqrs[0]
-logg, e_logg = medians[1], iqrs[1]
-rv, e_rv = medians[2], iqrs[2]
+teff, e_teff = labels[0], e_labels[0]
+logg, e_logg = labels[1], e_labels[1]
+rv, e_rv = labels[2], e_labels[2]
 ```
 
 ## References
