@@ -1,8 +1,6 @@
 # wdtools
 ![GitHub release (latest by date including pre-releases)](https://img.shields.io/github/v/release/vedantchandra/wdtools?include_prereleases)
 [![Documentation Status](https://readthedocs.org/projects/wdtools/badge/?version=latest)](https://wdtools.readthedocs.io/en/latest/?badge=latest)
-![GitHub](https://img.shields.io/github/license/vedantchandra/wdtools)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.3828007.svg)](https://doi.org/10.5281/zenodo.3828007)
 
 Package of tools to analyze white dwarf spectra. 
 
@@ -30,6 +28,27 @@ rv, e_rv = labels[2], e_labels[2]
 ```
 
 ## References
+
+If you use wdtools for your research, we would appreciate if you cite the Zenodo repository linked above, as well as our paper describing the package. A BibTeX reference is reproduced below for convenience. 
+
+```
+@ARTICLE{Chandra2020,
+author = {{Chandra}, Vedant and {Hwang}, Hsiang-Chih and
+{Zakamska}, Nadia and {Budavari}, Tamas},
+title = "{Computational Tools for the Spectroscopic Analysis of White Dwarfs}",
+journal = {MNRAS (submitted)},
+year = {2020}
+}
+
+@MISC{wdtools, 
+title={wdtools: Computational Tools for the Spectroscopic Analysis of White Dwarfs}, 
+DOI={10.5281/zenodo.3828686}, 
+publisher={Zenodo}, 
+author={Vedant Chandra}, 
+year={2020}
+}
+```
+
 
 If using the pre-trained generative neural network for white dwarf model atmospheres, kindly cite the original paper that describes these models: 
 
