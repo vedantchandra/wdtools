@@ -26,7 +26,7 @@ In case you wish to load the wdtools dependencies into an existing environment (
 
 .. code-block:: bash
 
-   conda env update --name [your-environment] -f wdtools.yaml
+   conda env update --name [your-environment] -f environment.yaml
 
 This may cause version conflicts with existing packages in that environment, so we encourage you to use our first method.
 
@@ -35,7 +35,7 @@ Add the following lines to your Python projects to import wdtools into your work
 .. code-block:: python
 
    import sys
-   sys.path.append('~/wdtools/')
+   sys.path.append('~/YourDirectoryPath/wdtools/')
    
    import wdtools
 
