@@ -80,7 +80,7 @@ class GFP:
         self.lamgrid['DA'] = self.lamgrid_DA
 
         if specclass == 'DB':
-            print('DB models unfortunately under restricted access right now and unavailable in this package.')
+            raise Exception('DB models unfortunately under restricted access right now and unavailable in this package.')
 
         try:
             self.H_DB = 128
