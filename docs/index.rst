@@ -3,14 +3,14 @@ wdtools: Computational Tools for the Spectroscopic Analysis of White Dwarfs
 
 .. image:: https://img.shields.io/github/v/release/vedantchandra/wdtools?include_prereleases   
    :alt: GitHub release (latest by date including pre-releases)
-
+   
 .. image:: https://readthedocs.org/projects/wdtools/badge/?version=latest
    :target: https://wdtools.readthedocs.io/en/latest/?badge=latest
    :alt: Documentation Status
-
+   
 .. image:: https://img.shields.io/github/license/vedantchandra/wdtools   
    :alt: GitHub
-
+   
 .. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.3828686.svg
    :target: https://doi.org/10.5281/zenodo.3828686
 
