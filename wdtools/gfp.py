@@ -202,7 +202,7 @@ class GFP:
         synth = pyasl.dopplerShift(self.lamgrid[specclass],np.ravel(
                         (
                                 self.model[specclass].predict(label))[0]
-                        ), rv
+                        ), rv, edgeHandling = 'FillValue', fillValue = np.nan
                     )[0]
         synth =  (np.ravel(synth).astype('float64'))
 
@@ -278,7 +278,7 @@ class GFP:
 
     def fit_spectrum(self, wl, fl, ivar = None, nwalkers = 100, burn = 100, ndraws = 50, make_plot = True, threads = 1, \
                     plot_trace = False, init = 'de', prior_teff = None, mleburn = 50, savename = None, isbinary = None, mask_threshold = 100,
-                    normalize_DA = False, lines = ['alpha', 'beta', 'gamma', 'delta']):
+                    normalize_DA = False, lines = ['alpha', 'beta', 'gamma', 'delta'], progress = True):
 
         """
         Main fitting routine, takes a continuum-normalized spectrum and fits it with MCMC to recover steller labels. 
@@ -406,14 +406,15 @@ class GFP:
         sampler = emcee.EnsembleSampler(nwalkers,ndim,lnprob,threads = threads)
 
         if init == 'de':
-
-            print('finding optimal starting point with differential evolution...')
             
             def residual(parvals):
                 model = self.spectrum_sampler(wl, parvals['teff'], parvals['logg'], parvals['rv'])
                 nonan = (~np.isnan(model)) * (~np.isnan(fl)) * (~np.isnan(ivar))
                 diff = model[nonan] - fl[nonan]
                 chisq = np.sum(diff**2 * ivar[nonan])
+
+                #print(np.sum(np.isnan(model)), np.sum(np.isnan(fl)), np.sum(np.isnan(ivar)))
+
                 return chisq
 
             ## Cold Solution
@@ -450,7 +451,7 @@ class GFP:
             for jj in range(ndim):
                 pos0[:,jj] = np.random.uniform(prior_lows[jj], prior_highs[jj], nwalkers)
 
-            b = sampler.run_mcmc(pos0, mleburn, progress = True)
+            b = sampler.run_mcmc(pos0, mleburn, progress = progress)
             lnprobs = sampler.get_log_prob(flat = True)
             mle = sampler.flatchain[np.argmax(lnprobs)]
 
@@ -461,11 +462,11 @@ class GFP:
 
 
         #Initialize sampler
-        b = sampler.run_mcmc(pos0,burn, progress = True)
+        b = sampler.run_mcmc(pos0,burn, progress = progress)
 
         sampler.reset()
 
-        b = sampler.run_mcmc(b.coords, ndraws, progress = True)
+        b = sampler.run_mcmc(b.coords, ndraws, progress = progress)
 
         if plot_trace:
             f, axs = plt.subplots(ndim, 1, figsize = (10, 6))

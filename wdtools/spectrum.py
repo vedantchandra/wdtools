@@ -385,7 +385,7 @@ class SpecTools():
             try:
 
                 result = linemodel.fit(1-contcorr[crop1:crop2],params,x = cropped_wl[crop1:crop2],\
-                            nan_policy = 'omit', method = 'lm')
+                            nan_policy = 'omit', method = 'leastsq')
                 if np.abs(result.params['center'].value - adaptive_centroid) > 5:
                     continue
             except ValueError:
@@ -409,9 +409,9 @@ class SpecTools():
         sigma_sample = np.std(centres)
 
         if None in errors or np.nan in errors:
-            return mean_centre, np.nan, sigma_sample
+            errors = [np.nan]
 
-        sigma_propagated = np.median(errors)
+        sigma_propagated = np.nanmedian(errors)
         total_sigma = np.sqrt(sigma_propagated**2 + sigma_sample**2) 
 
         
@@ -423,7 +423,7 @@ class SpecTools():
             plt.xlabel('Wavelength ($\mathrm{\AA}$)')
             plt.ylabel('Flux (Normalized)')
             plt.xlim(centroid - 35,centroid + 35)
-            plt.axvline(centroid, color = 'k', linestyle = '--')
+            #plt.axvline(centroid, color = 'k', linestyle = '--')
             plt.axvline(mean_centre, color = 'r', linestyle = '--')
             plt.tick_params(bottom=True, top=True, left=True, right=True)
             # plt.text(0.65, 0.1, '$\mathrm{v_r}$ = %i ± %i km/s'\
@@ -433,6 +433,8 @@ class SpecTools():
             plt.minorticks_on()
             plt.tick_params(which='major', length=10, width=1, direction='in', top = True, right = True)
             plt.tick_params(which='minor', length=5, width=1, direction='in', top = True, right = True)
+            plt.xlabel('Wavelength ($\mathrm{\AA}$)')
+            plt.ylabel('Normalized Flux')
             plt.tight_layout()
             #print(np.isnan(np.array(errors)))
             
