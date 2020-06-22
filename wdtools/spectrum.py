@@ -365,7 +365,7 @@ class SpecTools():
         crop1 = bisect_left(cropped_wl,centroid - half_window)
         crop2 = bisect_left(cropped_wl,centroid + half_window)
         init_result = linemodel.fit(1-contcorr[crop1:crop2],params,x = cropped_wl[crop1:crop2],\
-                            nan_policy = 'omit', method='nelder')
+                            nan_policy = 'omit', method='leastsq')
 
         if debug:
             plt.figure()
@@ -407,11 +407,17 @@ class SpecTools():
     #            plt.plot(cropped_wl[crop1:crop2],1-linemodel.eval(params,x=cropped_wl[crop1:crop2]),'k--')
         mean_centre = np.mean(centres)
         sigma_sample = np.std(centres)
+        if len(centres) == 0:
+            centres = [np.nan]
+            errors = [np.nan]
+            print('caution, none of the itereated fits were succesful')
+        final_centre = centres[-1]
 
         if None in errors or np.nan in errors:
             errors = [np.nan]
 
         sigma_propagated = np.nanmedian(errors)
+        sigma_final_centre = errors[-1]
         total_sigma = np.sqrt(sigma_propagated**2 + sigma_sample**2) 
 
         
@@ -438,4 +444,4 @@ class SpecTools():
             plt.tight_layout()
             #print(np.isnan(np.array(errors)))
             
-        return mean_centre, sigma_propagated, sigma_sample
+        return mean_centre, final_centre, sigma_final_centre, sigma_propagated, sigma_sample

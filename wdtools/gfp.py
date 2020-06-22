@@ -494,7 +494,6 @@ class GFP:
 
         if make_plot:
             #fig,ax = plt.subplots(ndim, ndim, figsize = (15,15))
-            plt.rcParams.update({'font.size': 12})
             f = corner.corner(sampler.flatchain, labels = param_names, \
                      label_kwargs = dict(fontsize =  16), quantiles = (0.16, 0.5, 0.84),
                      )
@@ -518,6 +517,16 @@ class GFP:
                     plt.plot(delta_wl, 1 + fit_fl_seg - 0.35 * kk, 'r')
                 plt.xlabel(r'$\mathrm{\Delta \lambda}\ (\mathrm{\AA})$')
                 plt.ylabel('Normalized Flux')
+
+                plt.text(0.05, 0.85, '$T_{\mathrm{eff}} = %i \pm %i\ K$' % (mle[0], stds[0]),
+                 transform = plt.gca().transAxes, fontsize = 16)
+        
+                plt.text(0.65, 0.85, '$\log{g} = %.2f \pm %.2f $' % (mle[1], stds[1]),
+                         transform = plt.gca().transAxes, fontsize = 16)
+                
+                plt.text(0.79, 0.75, '$\chi_r^2$ = %.2f' % (redchi),
+                         transform = plt.gca().transAxes, fontsize = 16)
+
                 if savename is not None:
                     plt.savefig(savename + '_fit.pdf', bbox_inches = 'tight')
             else:
