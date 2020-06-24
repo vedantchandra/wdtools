@@ -38,9 +38,9 @@ Please don't hesitate to reach out or `raise an issue <https://github.com/vedant
    install
 
    gfp
-
-   spectrum
-
+   
    parametric
 
    examples/1_fitting_wd_spectra
+
+   spectrum
