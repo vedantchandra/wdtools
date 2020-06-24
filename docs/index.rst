@@ -32,6 +32,8 @@ Please don't hesitate to reach out or `raise an issue <https://github.com/vedant
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
+   
+   self
 
    install
 
