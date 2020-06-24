@@ -1,5 +1,5 @@
-wdtools: Computational Tools for the Spectroscopic Analysis of White Dwarfs
-=========================================================================================
+wdtools
+===========
 
 .. image:: https://img.shields.io/github/v/release/vedantchandra/wdtools?include_prereleases   
    :alt: GitHub release (latest by date including pre-releases)
@@ -16,7 +16,7 @@ wdtools: Computational Tools for the Spectroscopic Analysis of White Dwarfs
 
 wdtools is a collection of techniques to characterize the atmospheric parameters of white dwarfs using spectroscopic data. The flagship class is the generative fitting pipeline (GFP), which fits ab-initio theoretical models to observed spectra in a Bayesian framework, using high-speed neural networks to interpolate synthetic spectra.
 
-If you use this package, kindly cite the following reference:
+If you use this package, kindly cite the following references:
 
 .. code-block:: none
 
@@ -25,7 +25,14 @@ If you use this package, kindly cite the following reference:
    {Zakamska}, Nadia and {Budavari}, Tamas},
    title = "{Computational Tools for the Spectroscopic Analysis of White Dwarfs}",
    journal = {MNRAS (submitted)},
-   year = "2020"}
+   year = {2020}}
+   
+   @MISC{wdtools, 
+   title={wdtools: Computational Tools for the Spectroscopic Analysis of White Dwarfs}, 
+   DOI={10.5281/zenodo.3828686}, 
+   publisher={Zenodo}, 
+   author={Vedant Chandra}, 
+   year={2020}}
 
 Please don't hesitate to reach out or `raise an issue <https://github.com/vedantchandra/wdtools/issues>`_ for any bug reports, feature requests, or general feedback!
 
