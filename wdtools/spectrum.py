@@ -410,7 +410,7 @@ class SpecTools():
         if len(centres) == 0:
             centres = [np.nan]
             errors = [np.nan]
-            print('caution, none of the itereated fits were succesful')
+            print('caution, none of the iterated fits were succesful')
         final_centre = centres[-1]
 
         if None in errors or np.nan in errors:

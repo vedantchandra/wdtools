@@ -503,7 +503,7 @@ class GFP:
             plt.show()
 
             if self.specclass == 'DA':
-                plt.figure(figsize = (8,5))
+                plt.figure(figsize = (8,7))
                 breakpoints = np.nonzero(np.diff(wl) > 5)[0]
                 breakpoints = np.concatenate(([0], breakpoints, [None]))
 
