@@ -344,9 +344,9 @@ class GFP:
             std, _ = beq.betaSigma(fl, 1, 1)
             ivar = np.repeat(1 / std**2, len(fl))
 
-        prior_lows = [6500, 6.6, -1000, 6500, 6.6, -1000, 0]
+        prior_lows = [6500, 6.5, -1000, 6500, 6.5, -1000, 0]
 
-        prior_highs = [40000, 9.4, 1000, 40000, 9.4, 1000, 1]
+        prior_highs = [40000, 9.5, 1000, 40000, 9.5, 1000, 1]
 
         if not isbinary:
 
@@ -420,7 +420,7 @@ class GFP:
             ## Cold Solution
 
             params = lmfit.Parameters()
-            params.add('teff', value = 10000, min = 6000, max = 15000)
+            params.add('teff', value = 10000, min = 6501, max = 15000)
             params.add('logg', value = 8, min = 6.5, max = 9.5)
             params.add('rv', value = 0, min = -1000, max = 1000)
             fitter = lmfit.Minimizer(residual, params, nan_policy = 'omit')
@@ -430,7 +430,7 @@ class GFP:
 
             ## Hot solution
 
-            params['teff'].set(value = 25000, min = 15000, max = 40000)
+            params['teff'].set(value = 25000, min = 15000, max = 39999)
             fitter = lmfit.Minimizer(residual, params, nan_policy = 'omit')
             res = fitter.minimize(method = 'differential_evolution')
             hot_result = [res.params['teff'].value, res.params['logg'].value, res.params['rv'].value]
