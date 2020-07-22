@@ -38,7 +38,7 @@ If you use wdtools for your research, we would appreciate if you cite the Zenodo
 author = {{Chandra}, Vedant and {Hwang}, Hsiang-Chih and
 {Zakamska}, Nadia and {Budavari}, Tamas},
 title = "{Computational Tools for the Spectroscopic Analysis of White Dwarfs}",
-journal = {MNRAS (submitted)},
+journal = {MNRAS (in press)},
 year = {2020}
 }
 
