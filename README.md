@@ -44,7 +44,7 @@ year = {2020}
 
 @MISC{wdtools, 
 title={wdtools: Computational Tools for the Spectroscopic Analysis of White Dwarfs}, 
-DOI={10.5281/zenodo.3828686}, 
+DOI={10.5281/zenodo.3828007}, 
 publisher={Zenodo}, 
 author={Vedant Chandra}, 
 year={2020}
