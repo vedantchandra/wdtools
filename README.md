@@ -8,9 +8,7 @@
 
 **Read the Paper:** https://ui.adsabs.harvard.edu/abs/2020arXiv200711598C/abstract
 
-To get started, clone the repository to your working folder and add this repository to your Python path. We recommend installing dependencies using ``conda`` and the provided ``environment.yaml`` file. 
-
-Example usage of wdtools to infer the temperature and surface gravity of a white dwarf from its spectrum:
+Example usage of wdtools to infer the temperature and surface gravity of a DA white dwarf from its spectrum:
 
 ``` python
 import sys
@@ -22,7 +20,7 @@ import wdtools
 
 gfp = wdtools.GFP(resolution = 3)
 
-labels, e_labels, redchi = gfp.fit_spectrum(wl_norm, flux_norm, ivar_norm, init = 'de', make_plot = True)
+labels, e_labels, redchi = gfp.fit_spectrum(wl, flux, ivar, normalize_DA = True, make_plot = True)
 
 teff, e_teff = labels[0], e_labels[0]
 logg, e_logg = labels[1], e_labels[1]
@@ -31,7 +29,7 @@ rv, e_rv = labels[2], e_labels[2]
 
 You may also be interested in https://github.com/SihaoCheng/WD_models, which provides tools to simulate and fit white dwarf spectral energy distributions (SEDs) and photometry using synthetic color tables. Another relevant tool is https://github.com/gnarayan/WDmodel, which provides the ability to fit non-LTE white dwarf models (for higher temperatures) to spectroscopy and photometry, and has a more sophisticated treatment of extinction. 
 
-## References
+## Citing This Work
 
 If you use wdtools for your research, we would appreciate if you cite the Zenodo repository linked above, as well as our paper describing the package. A BibTeX reference is reproduced below for convenience. 
 
@@ -53,6 +51,7 @@ year={2020}
 }
 ```
 
+## Other References
 
 If using the pre-trained generative neural network for white dwarf model atmospheres, kindly cite the original paper that describes these models: 
 
