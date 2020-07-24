@@ -9,7 +9,7 @@ scipy
 PyAstronomy
 tqdm
 sphinx-autoapi
-tensorflow
+tensorflow=1.13.1
 lmfit
 scikit-learn
 nbsphinx
