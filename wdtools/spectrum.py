@@ -47,7 +47,7 @@ class SpecTools():
         self.params['l_slope'].set(value = 0)
 
 
-    def continuum_normalize(self, wl, fl, ivar = None, croprange = (0, 2)):
+    def continuum_normalize(self, wl, fl, ivar = None):
         '''
         Continuum-normalization with smoothing splines that avoid a pre-made list of absorption lines for DA and DB spectra. To normalize spectra that only have Balmer lines (DA), we recommend using the `normalize_balmer` function instead. Also crops the spectrum to the 3700 - 7000 Angstrom range. 
         
@@ -195,6 +195,8 @@ class SpecTools():
         distance_dict : dict, optional
             Dictionary of centroid names and distances from the centroid to include in the normalization process. Should include the entire wings of each line and minimal continuum. No 
             two adjacent lines should have overlapping regions. 
+        sky_fill : float
+            What value to replace the telluric features with on the normalized spectrum. Defaults to np.nan. 
 
         Returns
         -------
@@ -308,8 +310,6 @@ class SpecTools():
         '''
         Statistical inference of spectral redshift by iteratively fitting Voigt profiles to cropped windows around the line centroid. 
 
-        TODO: Add ivar
-
         Parameters
         ---------
         wl : array
@@ -333,7 +333,7 @@ class SpecTools():
         -------
             tuple
                 Tuple of 3 values: the mean fitted centroid across iterations, the propagated uncertainty reported by the fitting routine, and the standard deviation
-                of the centroid across all iterations. We find the latter is a good estimator of statistical uncertainty in the fitted centroid. s
+                of the centroid across all iterations. We find the latter is a good estimator of statistical uncertainty in the fitted centroid.
 
         '''
     

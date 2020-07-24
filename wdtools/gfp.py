@@ -59,9 +59,9 @@ class GFP:
         Parameters
         ---------
         resolution : float
-            Spectral resolution of the observed spectrum, in Angstroms. The synthetic spectra are convolved with this Gaussian kernel before fitting. 
+            Spectral resolution of the observed spectrum, in Angstroms (sigma). The synthetic spectra are convolved with this Gaussian kernel before fitting. 
         specclass : str ['DA', 'DB']
-            Specifies whether to fit hydrogen-rich (DA) or helium-rich (DB) atmospheric models. 
+            Specifies whether to fit hydrogen-rich (DA) or helium-rich (DB) atmospheric models. DB atmospheric models are not publicly available at this time. 
         '''
 
 
@@ -173,7 +173,6 @@ class GFP:
     def synth_spectrum_sampler(self, wl, teff, logg, rv, specclass = None):
         """
         Generates synthetic spectra from labels using the neural network, translated by some radial velocity. These are _not_ interpolated onto the requested wavelength grid;
-
         The interpolation is performed only one time after the Gaussian convolution with the instrument resolution in `GFP.spectrum_sampler`. Use `GFP.spectrum_sampler` in most cases. 
         
         Parameters
@@ -187,7 +186,7 @@ class GFP:
         rv : float
             Radial velocity (redshift) of sampled spectrum in km/s
         specclass : str ['DA', 'DB']
-            Whether to use hydrogen-rich (DA) or helium-rich (DB) atmospheric models.
+            Whether to use hydrogen-rich (DA) or helium-rich (DB) atmospheric models. If None, uses default.  
 
         Returns
         -------
@@ -223,7 +222,7 @@ class GFP:
         rv : float
             radial velocity (redshift) of sampled spectrum in km/s
         specclass : str ['DA', 'DB']
-            Whether to use hydrogen-rich (DA) or helium-rich (DB) atmospheric models.
+            Whether to use hydrogen-rich (DA) or helium-rich (DB) atmospheric models. If none, reverts to default. 
         Returns
         -------
             array
@@ -238,6 +237,10 @@ class GFP:
         return func(wl)
 
     def binary_sampler(self, wl, teff_1, logg_1, rv_1, teff_2, logg_2, rv_2, lf = 1, specclass = None):
+        
+        """
+        Under development, do not use.
+        """
 
         if specclass is None:
             specclass = self.specclass;
@@ -278,8 +281,7 @@ class GFP:
 
     def fit_spectrum(self, wl, fl, ivar = None, nwalkers = 100, burn = 100, ndraws = 50, make_plot = True, threads = 1, \
                     plot_trace = False, init = 'de', prior_teff = None, mleburn = 50, savename = None, isbinary = None, mask_threshold = 100,
-                    normalize_DA = False, lines = ['alpha', 'beta', 'gamma', 'delta', 'eps', 'h8'], 
-                    progress = True, plot_label = True):
+                    normalize_DA = False, lines = ['alpha', 'beta', 'gamma', 'delta', 'eps', 'h8'], progress = True):
 
         """
         Main fitting routine, takes a continuum-normalized spectrum and fits it with MCMC to recover steller labels. 
@@ -291,9 +293,23 @@ class GFP:
         fl : array
             Array of observed spectral fluxes, continuum-normalized. We recommend using the included `normalize_balmer` function from `wdtools.spectrum` to normalize DA spectra, 
             and the generic `continuum_normalize` function for DB spectra. 
-        ivar : array, str ['infer']
-            Array of observed inverse-variance for uncertainty estimation. If this is not available, use `ivar = 'infer'` to infer a constant inverse variance mask using a second-order
+        ivar : array
+            Array of observed inverse-variance for uncertainty estimation. If this is not available, use `ivar = None` to infer a constant inverse variance mask using a second-order
             beta-sigma algorithm. In this case, since the errors are approximated, the chi-square likelihood may be inexact - treat returned uncertainties with caution. 
+        nwalkers : int, optional
+            Number of independent MCMC 'walkers' that will explore the parameter space
+        burn : int, optional
+            Number of steps to run and discard at the start of sampling to 'burn-in' the posterior parameter distribution. If intitializing from 
+            a high-probability point, keep this value high to avoid under-estimating uncertainties. 
+        ndraws : int, optional
+            Number of 'production' steps after the burn-in. The final number of posterior samples will be nwalkers * ndraws.
+        make_plot: bool, optional
+            If True, produces a plot of the best-fit synthetic spectrum over the observed spectrum, as well as a corner plot of the fitted parameters. 
+        threads : int, optional
+            Number of threads for distributed sampling. 
+        plot_trace: bool, optiomal
+            If True, plots the trace of posterior samples of each parameter for the production steps. Can be used to visually determine the quality of mixing of
+            the chains, and ascertain if a longer burn-in is required. 
         init : str, optional {'de', 'nm', 'unif', 'mle'}
             If 'de', the differential evolution algorithm is used to maximize the likelihood before MCMC sampling. It tries both hot and cold solutions, and choosing the one with the lowest chi^2.
             If 'unif', walkers are initialized uniformly in parameter space before the burn-in phase. If 'mle', there is a pre-burn phase with walkers initialized uniformly in 
@@ -301,31 +317,20 @@ class GFP:
             probablity region. For most applications, we recommend using 'de'.
         prior_teff : tuple, optional
             Tuple of (mean, sigma) to define a Gaussian prior on the effective temperature parameter. This is especially useful if there is strong prior knowledge of temperature 
-            from photometry. If not provided, a flat prior is used.
-        nwalkers : int, optional
-            Number of independent MCMC 'walkers' that will explore the parameter space
-        burn : int, optional
-            Number of steps to run and discard at the start of sampling to 'burn-in' the posterior parameter distribution. If intitializing from 
-            a high-probability point, keep this value high to avoid under-estimating uncertainties. 
-        ndraws : int, optional
-            Number of 'production' steps after the burn-in. The final number of posterior samples will be nwalkers * ndraws. 
+            from photometry. If not provided, a flat prior is used. 
         mleburn : int, optional
-            Number of steps for the pre-burn phase to estimate the MLE. 
-        threads : int, optional
-            Number of threads for distributed sampling. 
-        make_plot: bool, optional
-            If True, produces a plot of the best-fit synthetic spectrum over the observed spectrum, as well as a corner plot of the fitted parameters. 
-        plot_trace: bool, optiomal
-            If True, plots the trace of posterior samples of each parameter for the production steps. Can be used to visually determine the quality of mixing of
-            the chains, and ascertain if a longer burn-in is required. 
-        savename: str, optional
-            If provided, the corner plot and best-fit plot will be saved as PDFs. 
-
-
+            Number of steps for the pre-burn phase to estimate the MLE.
+        savename : str, optional
+            If provided, the corner plot and best-fit plot will be saved as PDFs in the working folder. 
+        normalize_DA : bool, optional
+            If True, normalizes the Balmer lines on a DA spectrum before fitting. We recommend doing the normalization seperately, to ensure it's accurate. 
+        lines : array, optional
+            List of Balmer lines to normalize if `normalize_DA = True`. Defaults to all from H-alpha to H8. 
+            
         Returns
         -------
-            `sampler`
-                emcee `sampler` object, from which posterior samples can be obtained using `sampler.flatchain`. 
+            array
+                Returns the fitted stellar labels along with a reduced chi-square statistic with the format: [(Teff, e_teff), (logg, e_logg), redchi]
         """
 
         if isbinary is None:
@@ -496,14 +501,14 @@ class GFP:
             #fig,ax = plt.subplots(ndim, ndim, figsize = (15,15))
             f = corner.corner(sampler.flatchain, labels = param_names, \
                      label_kwargs = dict(fontsize =  16), quantiles = (0.16, 0.5, 0.84),
-                     show_titles = True)
+                     )
             plt.tight_layout()
             if savename is not None:
                 plt.savefig(savename + '_corner.pdf', bbox_inches = 'tight')
             plt.show()
 
             if self.specclass == 'DA':
-                plt.figure(figsize = (9,6))
+                plt.figure(figsize = (8,7))
                 breakpoints = np.nonzero(np.diff(wl) > 5)[0]
                 breakpoints = np.concatenate(([0], breakpoints, [None]))
 
@@ -518,16 +523,14 @@ class GFP:
                 plt.xlabel(r'$\mathrm{\Delta \lambda}\ (\mathrm{\AA})$')
                 plt.ylabel('Normalized Flux')
 
-                if plot_label:
-
-                    # plt.text(0.05, 0.8, '$T_{\mathrm{eff}} = %i \pm %i\ K$' % (mle[0], stds[0]),
-                    #  transform = plt.gca().transAxes, fontsize = 18)
-            
-                    # plt.text(0.95, 0.8, '$\log{g} = %.2f \pm %.2f $' % (mle[1], stds[1]),
-                    #          transform = plt.gca().transAxes, fontsize = 18, ha = 'right')
-                    
-                    plt.text(0.95, 0.8, '$\chi_r^2$ = %.2f' % (redchi),
-                             transform = plt.gca().transAxes, fontsize = 20, ha = 'right')
+                plt.text(0.05, 0.85, '$T_{\mathrm{eff}} = %i \pm %i\ K$' % (mle[0], stds[0]),
+                 transform = plt.gca().transAxes, fontsize = 16)
+        
+                plt.text(0.65, 0.85, '$\log{g} = %.2f \pm %.2f $' % (mle[1], stds[1]),
+                         transform = plt.gca().transAxes, fontsize = 16)
+                
+                plt.text(0.79, 0.75, '$\chi_r^2$ = %.2f' % (redchi),
+                         transform = plt.gca().transAxes, fontsize = 16)
 
                 if savename is not None:
                     plt.savefig(savename + '_fit.pdf', bbox_inches = 'tight')
@@ -555,7 +558,7 @@ class GFP:
 if __name__ == '__main__':
     
     gfp = GFP(resolution = 3)
-    wl = np.linspace(3800, 8000, 4000)
+    wl = np.linspace(4000, 8000, 4000)
     fl = gfp.spectrum_sampler(wl, 6500, 6.58, 0)
     
     plt.plot(wl, fl)

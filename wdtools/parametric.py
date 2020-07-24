@@ -17,7 +17,7 @@ dir_path = os.path.dirname(path)
 class LineProfiles:
 	
 	'''
-	Class to fit Voigt profiles to the first 3 Balmer absorption lines, and then infer stellar labels.
+	Class to fit Voigt profiles to the Balmer absorption lines of DA white dwarfs, and then infer stellar labels.
 
 	Probabilistic prediction uses 100 boostrapped random forest models with 25 trees each, trained on 5326 spectra from the Sloan Digital Sky Survey. 
 	Ground truth labels are taken from Tremblay et al. (2019)
@@ -65,7 +65,11 @@ class LineProfiles:
 		return np.sum(residual**2)
 
 	def initialize(self):
-		pass
+		
+		"""
+		Initializes the random forest models by training them on the pre-supplied dataset of parameters. This only needs to be done once for each combination of absorption lines. The model is then pickled and saved for future use in the models/ directory. 
+		"""
+		
 		df = pd.read_csv(dir_path + '/models/sdss_parameters.csv')
 
 		targets = ['teff', 'logg']
@@ -95,23 +99,25 @@ class LineProfiles:
 		Window size and edge size can be modified. 
 		
 		Parameters
-        ---------
-        wl : array
-            Wavelength array of spectrum
-        flux : array
-        	Flux array of spectrum
-        centroid : float
-        	The theoretical centroid of the absorption line that is being fitted, in wavelength units. 
-        window : float, optional
-        	How many Angstroms away from the line centroid are included in the fit (in both directions). This should be large enough to include the absorption line as well as 
-        	some continuum on either side.
-        edges : float, optional
-        	What distance in Angstroms around each line (measured from the line center outwards) to exclude from the continuum-fitting step. This should be large enough to cover most of the 
-        	absorption line whilst leaving some continuum intact on either side. 
-        Returns
-        -------
-            lmfit `result` object
-                A `result` instance from the `lmfit` package, from which fitted parameters and fit statistics can be extracted. 
+		---------
+		wl : array
+		    Wavelength array of spectrum
+		flux : array
+			Flux array of spectrum
+		centroid : float
+			The theoretical centroid of the absorption line that is being fitted, in wavelength units. 
+		window : float, optional
+			How many Angstroms away from the line centroid are included in the fit (in both directions). This should be large enough to include the absorption line as well as 
+			some continuum on either side.
+		edges : float, optional
+			What distance in Angstroms around each line (measured from the line center outwards) to exclude from the continuum-fitting step. This should be large enough to cover most of the 
+			absorption line whilst leaving some continuum intact on either side. 
+		make_plot : bool, optional
+			Make a plot of the fit. 
+		Returns
+		-------
+		    lmfit `result` object
+			A `result` instance from the `lmfit` package, from which fitted parameters and fit statistics can be extracted. 
 
 		'''
 
@@ -164,16 +170,18 @@ class LineProfiles:
 		Fits Voigt profiles to the first three Balmer lines (H-alpha, H-beta, and H-gamma). Returns all 18 fitted parameters. 
 		
 		Parameters
-        ---------
-        wl : array
-            Wavelength array of spectrum
-        flux : array
-        	Flux array of spectrum
+		---------
+		wl : array
+		    Wavelength array of spectrum
+		flux : array
+			Flux array of spectrum
+		make_plot : bool, optional
+			Plot all individual Balmer fits. 
 
-        Returns
-        -------
-            array
-                Array of 18 Balmer parameters, 6 for each line. If the profile fit fails, returns array of 18 `np.nan` values. 
+		Returns
+		-------
+		    array
+			Array of 18 Balmer parameters, 6 for each line. If the profile fit fails, returns array of 18 `np.nan` values. 
 
 		'''
 		colnames = [];
@@ -196,14 +204,14 @@ class LineProfiles:
 
 	def train(self, x_data, y_data):
 		'''
-		Trains ensemble of random forests on the provided data. Does not require scaling.
+		Trains ensemble of random forests on the provided data. Does not require scaling. You shouldn't ever need to use this directly. 
 		
 		Parameters
-        ---------
-        x_data : array
-            Input data, independent variables
-        y_data : array
-        	Output data, dependent variables
+		---------
+		x_data : array
+		    Input data, independent variables
+		y_data : array
+			Output data, dependent variables
 
 		'''
 
@@ -230,14 +238,14 @@ class LineProfiles:
 		Predicts stellar labels from Balmer line parameters.
 		
 		Parameters
-        ---------
-        balmer_parameters : array
-            Array of fitted Balmer parameters from the `fit_balmer` function. 
+		---------
+		balmer_parameters : array
+		    Array of fitted Balmer parameters from the `fit_balmer` function. 
 
-        Returns
-        -------
-            array
-                Array of predicted stellar labels with the following format: [Teff, e_Teff, logg, e_logg]. 
+		Returns
+		-------
+		    array
+			Array of predicted stellar labels with the following format: [Teff, e_Teff, logg, e_logg]. 
 
 		'''
 
@@ -290,16 +298,20 @@ class LineProfiles:
 		Wrapper function that directly predicts stellar labels from a provided spectrum. Performs continuum-normalization, fits Balmer profiles, and uses the bootstrap ensemble of random forests to infer labels. 
 		
 		Parameters
-        ---------
-        wl : array
-            Array of spectrum wavelengths.
-        fl : array
-            Array of spectrum fluxes. Can be normalized or un-normalized. 
+		---------
+		wl : array
+		    Array of spectrum wavelengths.
+		fl : array
+		    Array of spectrum fluxes. Can be normalized or un-normalized. 
+		make_plot : bool, optional
+			Plot all the individual Balmer-Voigt fits. 
+		quantile : float, optional
+			Which quantile of the fitted labels to use for the bootstrap error estimation. Defaults to 0.67, which corresponds to a 1-sigma uncertainty. 
 
-        Returns
-        -------
-            array
-                Array of predicted stellar labels with the following format: [Teff, e_Teff, logg, e_logg]. 
+		Returns
+		-------
+		    array
+			Array of predicted stellar labels with the following format: [Teff, e_Teff, logg, e_logg]. 
 		'''
 
 		balmer_parameters = self.fit_balmer(wl,flux, make_plot = make_plot) 

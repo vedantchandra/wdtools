@@ -24,7 +24,7 @@ If you use this package, kindly cite the following references:
    author = {{Chandra}, Vedant and {Hwang}, Hsiang-Chih and
    {Zakamska}, Nadia and {Budavari}, Tamas},
    title = "{Computational Tools for the Spectroscopic Analysis of White Dwarfs}",
-   journal = {MNRAS (submitted)},
+   journal = {MNRAS (in press)},
    year = {2020}}
    
    @MISC{wdtools, 
