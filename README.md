@@ -8,8 +8,6 @@
 
 **Read the Paper:** https://ui.adsabs.harvard.edu/abs/2020arXiv200711598C/abstract
 
-To get started, clone the repository to your working folder and add this repository to your Python path. We recommend installing dependencies using ``conda`` and the provided ``environment.yaml`` file. 
-
 Example usage of wdtools to infer the temperature and surface gravity of a white dwarf from its spectrum:
 
 ``` python
