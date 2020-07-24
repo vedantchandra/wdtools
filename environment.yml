@@ -17,3 +17,7 @@ dependencies:
   - prompt_toolkit
   - ipython
   - keras
+  - nb_conda
+  - pip
+  - pip:
+    - PyAstronomy
