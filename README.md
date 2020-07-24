@@ -4,7 +4,7 @@
 ![GitHub](https://img.shields.io/github/license/vedantchandra/wdtools)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.3828007.svg)](https://doi.org/10.5281/zenodo.3828007)
 
-**Full Documentation:** https://wdtools.readthedocs.io/en/latest/. 
+**Full Documentation:** ![wdtools.readthedocs.io](https://wdtools.readthedocs.io/en/latest/).
 
 **Read the Paper:** https://ui.adsabs.harvard.edu/abs/2020arXiv200711598C/abstract
 
