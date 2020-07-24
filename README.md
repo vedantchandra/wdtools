@@ -5,6 +5,7 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.3828007.svg)](https://doi.org/10.5281/zenodo.3828007)
 
 **Full Documentation:** https://wdtools.readthedocs.io/en/latest/. 
+**Read the Paper:** https://ui.adsabs.harvard.edu/abs/2020arXiv200711598C/abstract
 
 To get started, clone the repository to your working folder and add this repository to your Python path. We recommend installing dependencies using ``conda`` and the provided ``environment.yaml`` file. 
 
