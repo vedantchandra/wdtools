@@ -278,7 +278,8 @@ class GFP:
 
     def fit_spectrum(self, wl, fl, ivar = None, nwalkers = 100, burn = 100, ndraws = 50, make_plot = True, threads = 1, \
                     plot_trace = False, init = 'de', prior_teff = None, mleburn = 50, savename = None, isbinary = None, mask_threshold = 100,
-                    normalize_DA = False, lines = ['alpha', 'beta', 'gamma', 'delta'], progress = True):
+                    normalize_DA = False, lines = ['alpha', 'beta', 'gamma', 'delta', 'eps', 'h8'], 
+                    progress = True, plot_label = True):
 
         """
         Main fitting routine, takes a continuum-normalized spectrum and fits it with MCMC to recover steller labels. 
@@ -292,8 +293,7 @@ class GFP:
             and the generic `continuum_normalize` function for DB spectra. 
         ivar : array, str ['infer']
             Array of observed inverse-variance for uncertainty estimation. If this is not available, use `ivar = 'infer'` to infer a constant inverse variance mask using a second-order
-            beta-sigma algorithm. In this case, since the errors are approximated, the chi-square likelihood may be inexact - treat returned uncertainties with caution. Spectra without
-            good noise information may be better suited for `gfp.fit_spectrum_abc`, which performs likelihood-free inference.
+            beta-sigma algorithm. In this case, since the errors are approximated, the chi-square likelihood may be inexact - treat returned uncertainties with caution. 
         init : str, optional {'de', 'nm', 'unif', 'mle'}
             If 'de', the differential evolution algorithm is used to maximize the likelihood before MCMC sampling. It tries both hot and cold solutions, and choosing the one with the lowest chi^2.
             If 'unif', walkers are initialized uniformly in parameter space before the burn-in phase. If 'mle', there is a pre-burn phase with walkers initialized uniformly in 
@@ -496,14 +496,14 @@ class GFP:
             #fig,ax = plt.subplots(ndim, ndim, figsize = (15,15))
             f = corner.corner(sampler.flatchain, labels = param_names, \
                      label_kwargs = dict(fontsize =  16), quantiles = (0.16, 0.5, 0.84),
-                     )
+                     show_titles = True)
             plt.tight_layout()
             if savename is not None:
                 plt.savefig(savename + '_corner.pdf', bbox_inches = 'tight')
             plt.show()
 
             if self.specclass == 'DA':
-                plt.figure(figsize = (8,7))
+                plt.figure(figsize = (9,6))
                 breakpoints = np.nonzero(np.diff(wl) > 5)[0]
                 breakpoints = np.concatenate(([0], breakpoints, [None]))
 
@@ -518,14 +518,16 @@ class GFP:
                 plt.xlabel(r'$\mathrm{\Delta \lambda}\ (\mathrm{\AA})$')
                 plt.ylabel('Normalized Flux')
 
-                plt.text(0.05, 0.85, '$T_{\mathrm{eff}} = %i \pm %i\ K$' % (mle[0], stds[0]),
-                 transform = plt.gca().transAxes, fontsize = 16)
-        
-                plt.text(0.65, 0.85, '$\log{g} = %.2f \pm %.2f $' % (mle[1], stds[1]),
-                         transform = plt.gca().transAxes, fontsize = 16)
-                
-                plt.text(0.79, 0.75, '$\chi_r^2$ = %.2f' % (redchi),
-                         transform = plt.gca().transAxes, fontsize = 16)
+                if plot_label:
+
+                    # plt.text(0.05, 0.8, '$T_{\mathrm{eff}} = %i \pm %i\ K$' % (mle[0], stds[0]),
+                    #  transform = plt.gca().transAxes, fontsize = 18)
+            
+                    # plt.text(0.95, 0.8, '$\log{g} = %.2f \pm %.2f $' % (mle[1], stds[1]),
+                    #          transform = plt.gca().transAxes, fontsize = 18, ha = 'right')
+                    
+                    plt.text(0.95, 0.8, '$\chi_r^2$ = %.2f' % (redchi),
+                             transform = plt.gca().transAxes, fontsize = 20, ha = 'right')
 
                 if savename is not None:
                     plt.savefig(savename + '_fit.pdf', bbox_inches = 'tight')
@@ -553,7 +555,7 @@ class GFP:
 if __name__ == '__main__':
     
     gfp = GFP(resolution = 3)
-    wl = np.linspace(4000, 8000, 4000)
+    wl = np.linspace(3800, 8000, 4000)
     fl = gfp.spectrum_sampler(wl, 6500, 6.58, 0)
     
     plt.plot(wl, fl)

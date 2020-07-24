@@ -338,8 +338,8 @@ class SpecTools():
         '''
     
         window_step = -window_step
-        in1 = bisect_left(wl,centroid-60)
-        in2 = bisect_left(wl,centroid+60)
+        in1 = bisect_left(wl,centroid-100)
+        in2 = bisect_left(wl,centroid+100)
         cropped_wl = wl[in1:in2]
         cflux = flux[in1:in2]
         
