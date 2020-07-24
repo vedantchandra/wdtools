@@ -8,7 +8,7 @@
 
 **Read the Paper:** https://ui.adsabs.harvard.edu/abs/2020arXiv200711598C/abstract
 
-Example usage of wdtools to infer the temperature and surface gravity of a white dwarf from its spectrum:
+Example usage of wdtools to infer the temperature and surface gravity of a DA white dwarf from its spectrum:
 
 ``` python
 import sys
@@ -20,7 +20,7 @@ import wdtools
 
 gfp = wdtools.GFP(resolution = 3)
 
-labels, e_labels, redchi = gfp.fit_spectrum(wl_norm, flux_norm, ivar_norm, init = 'de', make_plot = True)
+labels, e_labels, redchi = gfp.fit_spectrum(wl, flux, ivar, normalize_DA = True, make_plot = True)
 
 teff, e_teff = labels[0], e_labels[0]
 logg, e_logg = labels[1], e_labels[1]
