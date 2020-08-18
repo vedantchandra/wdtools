@@ -20,12 +20,17 @@ If you use this package, kindly cite the following references:
 
 .. code-block:: none
 
-   @ARTICLE{wdtools,
-   author = {{Chandra}, Vedant and {Hwang}, Hsiang-Chih and
-   {Zakamska}, Nadia and {Budavari}, Tamas},
-   title = "{Computational Tools for the Spectroscopic Analysis of White Dwarfs}",
-   journal = {MNRAS (in press)},
-   year = {2020}}
+   @ARTICLE{Chandra2020,
+   author = {{Chandra}, Vedant and {Hwang}, Hsiang-Chih and {Zakamska}, Nadia L. and {Budav{\'a}ri}, Tam{\'a}s},
+   title = "{Computational tools for the spectroscopic analysis of white dwarfs}",
+   journal = {MNRAS},
+   year = 2020,
+   month = jul,
+   volume = {497},
+   number = {3},
+   pages = {2688-2698},
+   doi = {10.1093/mnras/staa2165},
+   }
    
    @MISC{wdtools, 
    title={wdtools: Computational Tools for the Spectroscopic Analysis of White Dwarfs}, 
