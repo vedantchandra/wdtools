@@ -4,7 +4,6 @@ pandas
 astropy
 keras
 corner
-pyabc
 scipy
 PyAstronomy
 tqdm
