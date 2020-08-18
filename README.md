@@ -6,7 +6,7 @@
 
 **Full Documentation:** [wdtools.readthedocs.io](https://wdtools.readthedocs.io/en/latest/).
 
-**Read the Paper:** https://ui.adsabs.harvard.edu/abs/2020arXiv200711598C/abstract
+**Read the Paper:** https://ui.adsabs.harvard.edu/abs/2020MNRAS.497.2688C/abstract
 
 Example usage of wdtools to infer the temperature and surface gravity of a DA white dwarf from its spectrum:
 
@@ -35,19 +35,24 @@ If you use wdtools for your research, we would appreciate if you cite the Zenodo
 
 ```
 @ARTICLE{Chandra2020,
-author = {{Chandra}, Vedant and {Hwang}, Hsiang-Chih and
-{Zakamska}, Nadia and {Budavari}, Tamas},
-title = "{Computational Tools for the Spectroscopic Analysis of White Dwarfs}",
-journal = {MNRAS (in press)},
-year = {2020}
+  author = {{Chandra}, Vedant and {Hwang}, Hsiang-Chih and {Zakamska}, Nadia L. and {Budav{\'a}ri}, Tam{\'a}s},
+  title = "{Computational tools for the spectroscopic analysis of white dwarfs}",
+  journal = {\mnras},
+  year = 2020,
+  month = jul,
+  volume = {497},
+  number = {3},
+  pages = {2688-2698},
+  doi = {10.1093/mnras/staa2165}
 }
 
+
 @MISC{wdtools, 
-title={wdtools: Computational Tools for the Spectroscopic Analysis of White Dwarfs}, 
-DOI={10.5281/zenodo.3828007}, 
-publisher={Zenodo}, 
-author={Vedant Chandra}, 
-year={2020}
+  title={wdtools: Computational Tools for the Spectroscopic Analysis of White Dwarfs}, 
+  DOI={10.5281/zenodo.3828007}, 
+  publisher={Zenodo}, 
+  author={Vedant Chandra}, 
+  year={2020}
 }
 ```
 
