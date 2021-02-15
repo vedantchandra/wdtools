@@ -305,7 +305,7 @@ class SpecTools():
         return np.sum(residual**2)
 
     def find_centroid(self, wl, flux, centroid, half_window = 25, window_step = 2, n_fit = 12, make_plot = False, \
-                 pltname = '', debug = False):
+                 pltname = '', debug = False, normalize = True):
 
         '''
         Statistical inference of spectral redshift by iteratively fitting Voigt profiles to cropped windows around the line centroid. 
@@ -342,12 +342,17 @@ class SpecTools():
         in2 = bisect_left(wl,centroid+100)
         cropped_wl = wl[in1:in2]
         cflux = flux[in1:in2]
+
+        if normalize:
         
-        cmask = (cropped_wl < centroid - 50)+(cropped_wl > centroid + 50)
+            cmask = (cropped_wl < centroid - 50)+(cropped_wl > centroid + 50)
 
-        p,cov = curve_fit(self.linear,cropped_wl[cmask][~np.isnan(cflux[cmask])],cflux[cmask][~np.isnan(cflux[cmask])])
+            p,cov = curve_fit(self.linear,cropped_wl[cmask][~np.isnan(cflux[cmask])],cflux[cmask][~np.isnan(cflux[cmask])])
 
-        contcorr = cflux / self.linear(cropped_wl, *p)
+            contcorr = cflux / self.linear(cropped_wl, *p)
+        else:
+            contcorr = cflux
+
         linemodel = lmfit.models.GaussianModel()
         params = linemodel.make_params()
         params['amplitude'].set(value = 2)
