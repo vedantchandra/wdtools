@@ -250,10 +250,11 @@ class GFP:
         # print(polyargs)
 
         if self.cont_fixed:
-            synth = synth * polyval(wl/1000, self.poly_arg) / self.smooth_cont
+            mod_smooth_cont = scipy.interpolate.interp1d(wl[self.contmask],  synth[self.contmask])(wl)
+            synth = synth / mod_smooth_cont
 
         if len(polyargs) > 0:
-            synth = synth * polyval(wl/1000, polyargs)
+            synth = synth * chebval(2*(wl - wl.min() / (wl.max())) - 1.0, polyargs)
 
         return synth
 
@@ -368,6 +369,9 @@ class GFP:
         fl = fl[in1:in2]
         ivar = ivar[in1:in2]
 
+        # fl = fl / np.median(fl)
+        # ivar = ivar * np.median(fl)**2
+
         # if normalize_DA == True:
         #     sp = SpecTools()
         #     if ivar is None:
@@ -385,10 +389,26 @@ class GFP:
 
         prior_highs = [40000, 9.5, 1000, 40000, 9.5, 1000, 1]
 
+        edges = [];
+        breakpoints = [];
 
-        mask = np.ones(len(wl))
-        self.mask = mask > 0
-        contmask = self.mask
+        if mask_DA:
+            mask = np.zeros(len(wl))
+            for line in lines:
+                c1 = self.centroid_dict[line] - self.distance_dict[line]
+                c2 = self.centroid_dict[line] + self.distance_dict[line]
+                mask += (wl > c1)*\
+                        (wl < c2)
+                edges.extend([c1, c2])
+                breakpoints.extend([bisect_left(wl, c2), bisect_left(wl, c1)])
+
+            self.contmask = ~(mask > 0)
+
+        #smooth_cont = scipy.interpolate.interp1d(wl[contmask], fl[contmask])(wl)
+        #fl = fl / smooth_cont
+        #ivar = ivar * smooth_cont**2
+
+        self.mask = np.ones(len(wl)) > 0
 
         if not isbinary:
 
@@ -450,9 +470,8 @@ class GFP:
         #     init_prms = [12000, 8, 0, 12000, 8, 0, 1]
         #     param_names = ['$T_{eff, 1}$', '$\log{g}_1$', '$RV_1$', '$T_{eff, 2}$', '$\log{g}_2$', '$RV_2$', '$f_{2,1}$']
         if not isbinary:
-            ndim = nstarparams + polyorder + 1
-            init_prms = [25000, 8, 0]
-            init_prms.extend(polyfit(wl/1000, fl, cont_polyorder))
+            init_prms = [15000, 8, 0]
+            init_prms.extend(chebfit(2*(wl - wl.min() / (wl.max())) - 1.0, fl, cont_polyorder))
             param_names = ['$T_{eff}$', '$\log{g}$', '$RV$']
             param_names.extend(['$c_%i$' % ii for ii in range(polyorder + 1)])
 
@@ -476,6 +495,7 @@ class GFP:
         # print(init_prms)
         # print(bounds)
 
+        self.mask = np.ones(len(wl)) > 0
         nll = lambda *args: -lnprob(*args)
         soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = 500))
         print(soln.x)
@@ -484,32 +504,22 @@ class GFP:
         #             p0 = init_prms, sigma = np.sqrt(1/ivar[mask]), absolute_sigma = True,
         #                 bounds = bounds, method = 'trf', xtol = 1e-10, ftol = 1e-10)
 
-        plt.plot(wl, fl)
-        plt.plot(wl, self.spectrum_sampler(wl, *init_prms))
-        plt.plot(wl, self.spectrum_sampler(wl, *soln.x), 'r')
-        plt.show()
-
         # fl = fl / polyval(wl/1000, soln.x[nstarparams:])
         # ivar = ivar * polyval(wl/1000, soln.x[nstarparams:])**2
 
-        edges = [];
-        breakpoints = [];
-
-        if mask_DA:
-            mask = np.zeros(len(wl))
-            for line in lines:
-                c1 = self.centroid_dict[line] - self.distance_dict[line]
-                c2 = self.centroid_dict[line] + self.distance_dict[line]
-                mask += (wl > c1)*\
-                        (wl < c2)
-                edges.extend([c1, c2])
-                breakpoints.extend([bisect_left(wl, c2), bisect_left(wl, c1)])
-
-            self.mask = mask > 0
-            contmask = ~self.mask
+        self.mask = mask > 0
+        contmask = ~self.mask
 
         smooth_cont = scipy.interpolate.interp1d(wl[contmask], self.spectrum_sampler(wl, *soln.x)[contmask])(wl)
         self.poly_arg = soln.x[nstarparams:]
+
+        plt.plot(wl, fl, 'k', label = 'Data')
+        plt.plot(wl, self.spectrum_sampler(wl, *init_prms), label = 'Initial Guess')
+        plt.plot(wl, self.spectrum_sampler(wl, *soln.x), 'r', label = 'Continuum Fit')
+        plt.plot(wl, smooth_cont, 'g', label = 'Smooth Continuum')
+        plt.legend()
+        plt.show()
+
 
         fl = fl / smooth_cont
         ivar = ivar * smooth_cont**2
@@ -517,80 +527,55 @@ class GFP:
         self.cont_fixed = True
         self.smooth_cont = smooth_cont
 
-        init_prms = init_prms[:nstarparams]
-        init_prms.extend(polyfit(wl/1000, fl, polyorder))
+        plt.plot(wl, fl)
+        plt.plot(wl, self.spectrum_sampler(wl, *[17000, 7.9, 10]))
+        plt.plot(wl, self.spectrum_sampler(wl, *[8000, 8.5, 120]))
+        plt.show()
+
+
+        plt.plot(wl, 1 / np.sqrt(ivar))
+        plt.show()
 
 
         #### CHANGE BELOW TO CURVE FIT TO GET COV MATRIX AND PLUG INTO EMCEE
 
+        init_prms = [9000, 8, soln.x[2]]
+        init_prms.extend(np.zeros(polyorder))
+        init_prms[nstarparams] = 1
+        print(init_prms)
         nll = lambda *args: -lnprob(*args)
-        soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = 500))
-        print(soln.x)
+        cool_soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = 500))
+        cool_chi = -2 * lnprob(cool_soln.x)
+        print(cool_soln.x)
+
+        init_prms = [18000, 8, soln.x[2]]
+        init_prms.extend(np.zeros(polyorder))
+        init_prms[nstarparams] = 1
+        nll = lambda *args: -lnprob(*args)
+        warm_soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = 500))
+        warm_chi = -2 * lnprob(warm_soln.x)
+        print(warm_soln.x)
+
+        print(cool_chi, warm_chi)
+
+        if cool_chi < warm_chi:
+            soln.x = cool_soln.x
+        else:
+            soln.x = warm_soln.x
+
+
+        ndim = len(soln.x)
+        
+        sampler = emcee.EnsembleSampler(nwalkers,ndim,lnprob, threads = threads)
 
         pos0 = np.zeros((nwalkers,ndim))
 
-        sampler = emcee.EnsembleSampler(nwalkers,ndim,lnprob, threads = threads)
 
         for jj in range(ndim):
-                pos0[:,jj] = (soln.x[jj] + 0.01*soln.x[jj]*np.random.normal(size = nwalkers))
+                pos0[:,jj] = (soln.x[jj] + 1e-5*soln.x[jj]*np.random.normal(size = nwalkers))
 
-        # if init == 'de':
-            
-        #     def residual(parvals):
-        #         model = self.spectrum_sampler(wl, parvals['teff'], parvals['logg'], parvals['rv'])
-        #         nonan = (~np.isnan(model)) * (~np.isnan(fl)) * (~np.isnan(ivar))
-        #         diff = model[nonan] - fl[nonan]
-        #         chisq = np.sum(diff**2 * ivar[nonan])
+        print(pos0.shape)
 
-        #         #print(np.sum(np.isnan(model)), np.sum(np.isnan(fl)), np.sum(np.isnan(ivar)))
-
-        #         return chisq
-
-        #     ## Cold Solution
-
-        #     params = lmfit.Parameters()
-        #     params.add('teff', value = 10000, min = 6501, max = 15000)
-        #     params.add('logg', value = 8, min = 6.5, max = 9.5)
-        #     params.add('rv', value = 0, min = -1000, max = 1000)
-        #     fitter = lmfit.Minimizer(residual, params, nan_policy = 'omit')
-        #     res = fitter.minimize(method = 'differential_evolution')
-        #     cold_result = [res.params['teff'].value, res.params['logg'].value, res.params['rv'].value]
-        #     cold_chi = -2 * lnprob(cold_result)
-
-        #     ## Hot solution
-
-        #     params['teff'].set(value = 25000, min = 15000, max = 39999)
-        #     fitter = lmfit.Minimizer(residual, params, nan_policy = 'omit')
-        #     res = fitter.minimize(method = 'differential_evolution')
-        #     hot_result = [res.params['teff'].value, res.params['logg'].value, res.params['rv'].value]
-        #     hot_chi = -2 * lnprob(hot_result)
-
-        #     if cold_chi <= hot_chi:
-        #         result = cold_result
-        #     elif cold_chi > hot_chi:
-        #         result = hot_result
-
-            # for jj in range(ndim):
-            #     pos0[:,jj] = (result[jj] + 0.001*np.random.normal(size = nwalkers))
-
-        # if init == 'unif':
-        #     for jj in range(ndim):
-        #         pos0[:,jj] = np.random.uniform(prior_lows[jj], prior_highs[jj], nwalkers)
-        # elif init == 'mle':
-        #     for jj in range(ndim):
-        #         pos0[:,jj] = np.random.uniform(prior_lows[jj], prior_highs[jj], nwalkers)
-
-        #     b = sampler.run_mcmc(pos0, mleburn, progress = progress)
-        #     lnprobs = sampler.get_log_prob(flat = True)
-        #     mle = sampler.flatchain[np.argmax(lnprobs)]
-
-        #     for jj in range(ndim):
-        #         pos0[:,jj] = (mle[jj] + 0.001*np.random.normal(size = nwalkers))
-
-        #     sampler.reset()
-
-
-        #Initialize sampler
         b = sampler.run_mcmc(pos0, burn, progress = progress)
 
         sampler.reset()
@@ -656,8 +641,8 @@ class GFP:
                     fit_fl_seg = fit_fl[breakpoints[kk]:breakpoints[kk+1]]
                     peak = int(len(wl_seg)/2)
                     delta_wl = wl_seg - wl_seg[peak]
-                    plt.plot(delta_wl, 1 + fl_seg - 0.1 * kk, 'k')
-                    plt.plot(delta_wl, 1 + fit_fl_seg - 0.1 * kk, 'r')
+                    plt.plot(delta_wl, 1 + fl_seg - 0.2 * kk, 'k')
+                    plt.plot(delta_wl, 1 + fit_fl_seg - 0.2 * kk, 'r')
                 plt.xlabel(r'$\mathrm{\Delta \lambda}\ (\mathrm{\AA})$')
                 plt.ylabel('Normalized Flux')
 
