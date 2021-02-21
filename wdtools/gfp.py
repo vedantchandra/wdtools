@@ -32,7 +32,7 @@ path = os.path.abspath(__file__)
 dir_path = os.path.dirname(path)
 sys.path.append(dir_path)
 
-from spectrum import SpecTools
+from .spectrum import SpecTools
 
 interp1d = interpolate.interp1d
 Table = table.Table
@@ -513,12 +513,14 @@ class GFP:
         smooth_cont = scipy.interpolate.interp1d(wl[contmask], self.spectrum_sampler(wl, *soln.x)[contmask])(wl)
         self.poly_arg = soln.x[nstarparams:]
 
-        plt.plot(wl, fl, 'k', label = 'Data')
-        plt.plot(wl, self.spectrum_sampler(wl, *init_prms), label = 'Initial Guess')
-        plt.plot(wl, self.spectrum_sampler(wl, *soln.x), 'r', label = 'Continuum Fit')
-        plt.plot(wl, smooth_cont, 'g', label = 'Smooth Continuum')
-        plt.legend()
-        plt.show()
+        if plot_init:
+            plt.figure(figsize = (10, 8))
+            plt.plot(wl, fl, 'k', label = 'Data')
+            plt.plot(wl, self.spectrum_sampler(wl, *init_prms), label = 'Initial Guess')
+            plt.plot(wl, self.spectrum_sampler(wl, *soln.x), 'r', label = 'Continuum Fit')
+            plt.plot(wl, smooth_cont, 'g', label = 'Smooth Continuum')
+            plt.legend()
+            plt.show()
 
 
         fl = fl / smooth_cont
@@ -527,14 +529,14 @@ class GFP:
         self.cont_fixed = True
         self.smooth_cont = smooth_cont
 
-        plt.plot(wl, fl)
-        plt.plot(wl, self.spectrum_sampler(wl, *[17000, 7.9, 10]))
-        plt.plot(wl, self.spectrum_sampler(wl, *[8000, 8.5, 120]))
-        plt.show()
+        # plt.plot(wl, fl)
+        # plt.plot(wl, self.spectrum_sampler(wl, *[17000, 7.9, 10]))
+        # plt.plot(wl, self.spectrum_sampler(wl, *[8000, 8.5, 120]))
+        # plt.show()
 
 
-        plt.plot(wl, 1 / np.sqrt(ivar))
-        plt.show()
+        # plt.plot(wl, 1 / np.sqrt(ivar))
+        # plt.show()
 
 
         #### CHANGE BELOW TO CURVE FIT TO GET COV MATRIX AND PLUG INTO EMCEE
@@ -542,11 +544,11 @@ class GFP:
         init_prms = [9000, 8, soln.x[2]]
         init_prms.extend(np.zeros(polyorder))
         init_prms[nstarparams] = 1
-        print(init_prms)
+        #print(init_prms)
         nll = lambda *args: -lnprob(*args)
         cool_soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = 500))
         cool_chi = -2 * lnprob(cool_soln.x)
-        print(cool_soln.x)
+        #print(cool_soln.x)
 
         init_prms = [18000, 8, soln.x[2]]
         init_prms.extend(np.zeros(polyorder))
@@ -554,9 +556,9 @@ class GFP:
         nll = lambda *args: -lnprob(*args)
         warm_soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = 500))
         warm_chi = -2 * lnprob(warm_soln.x)
-        print(warm_soln.x)
+        #print(warm_soln.x)
 
-        print(cool_chi, warm_chi)
+        #print(cool_chi, warm_chi)
 
         if cool_chi < warm_chi:
             soln.x = cool_soln.x
@@ -574,7 +576,7 @@ class GFP:
         for jj in range(ndim):
                 pos0[:,jj] = (soln.x[jj] + 1e-5*soln.x[jj]*np.random.normal(size = nwalkers))
 
-        print(pos0.shape)
+        #print(pos0.shape)
 
         b = sampler.run_mcmc(pos0, burn, progress = progress)
 
