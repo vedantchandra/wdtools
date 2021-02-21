@@ -20,7 +20,12 @@ import wdtools
 
 gfp = wdtools.GFP(resolution = 3)
 
-labels, e_labels, redchi = gfp.fit_spectrum(wl, flux, ivar, normalize_DA = True, make_plot = True)
+labels, e_labels, redchi = gfp.fit_spectrum(wl, flux, ivar, mask_DA = True,
+                                nwalkers = 50, burn = 100, ndraws = 100,
+                                polyorder = 4, cont_polyorder = 4,
+                                plot_init = True,
+                                make_plot = True, plot_corner = True, 
+                                plot_trace = False, savename = 'example')
 
 teff, e_teff = labels[0], e_labels[0]
 logg, e_logg = labels[1], e_labels[1]
