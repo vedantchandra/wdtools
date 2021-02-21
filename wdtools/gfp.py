@@ -14,11 +14,19 @@ import os
 from PyAstronomy import pyasl
 import emcee
 import corner
-import keras
 from scipy import optimize as opt
 from bisect import bisect_left
 import warnings
 import lmfit
+
+import tensorflow as tf
+from tensorflow.python.keras.models import *
+from tensorflow.keras.layers import *
+from tensorflow.keras.optimizers import *
+
+from numpy.polynomial.polynomial import polyfit, polyval
+from numpy.polynomial.chebyshev import chebfit, chebval
+
 
 path = os.path.abspath(__file__)
 dir_path = os.path.dirname(path)
@@ -71,28 +79,34 @@ class GFP:
         self.lamgrid = {};
 
         self.H_DA = 128
-        self.lamgrid_DA = pickle.load(open(dir_path + '/models/neural_gen/DA_lamgrid.p', 'rb'))
+        self.lamgrid_DA = np.loadtxt(dir_path + '/models/neural_gen/DA_lamgrid.txt')
         self.model_DA = self.generator(self.H_DA, len(self.lamgrid_DA))
         self.model_DA.load_weights(dir_path + '/models/neural_gen/DA_normNN.h5')
+        self.spec_min, self.spec_max = np.loadtxt(dir_path + '/models/neural_gen/DA_specsc.txt')
         pix_per_a = len(self.lamgrid_DA) / (self.lamgrid_DA[-1] - self.lamgrid_DA[0])
         self.resolution['DA'] = resolution * pix_per_a
         self.model['DA'] = self.model_DA
         self.lamgrid['DA'] = self.lamgrid_DA
 
+        self.cont_fixed = False
+
+        self.centroid_dict = dict(alpha = 6564.61, beta = 4862.68, gamma = 4341.68, delta = 4102.89, eps = 3971.20, h8 = 3890.12)
+        self.distance_dict = dict(alpha = 250, beta = 250, gamma = 120, delta = 75, eps = 50, h8 = 25)
+
         if specclass == 'DB':
             raise Exception('DB models unfortunately under restricted access right now and unavailable in this package.')
 
-        try:
-            self.H_DB = 128
-            self.lamgrid_DB = pickle.load(open(dir_path + '/models/neural_gen/DB_lamgrid.p', 'rb'))
-            self.model_DB = self.generator(self.H_DB, len(self.lamgrid_DB))
-            self.model_DB.load_weights(dir_path + '/models/neural_gen/DB_normNN.h5')
-            pix_per_a = len(self.lamgrid_DB) / (self.lamgrid_DB[-1] - self.lamgrid_DB[0])
-            self.resolution['DB'] = resolution * pix_per_a
-            self.model['DB'] = self.model_DB
-            self.lamgrid['DB'] = self.lamgrid_DB
-        except:
-            print('DB models not loaded.')
+        # try:
+        #     self.H_DB = 128
+        #     self.lamgrid_DB = pickle.load(open(dir_path + '/models/neural_gen/DB_lamgrid.p', 'rb'))
+        #     self.model_DB = self.generator(self.H_DB, len(self.lamgrid_DB))
+        #     self.model_DB.load_weights(dir_path + '/models/neural_gen/DB_normNN.h5')
+        #     pix_per_a = len(self.lamgrid_DB) / (self.lamgrid_DB[-1] - self.lamgrid_DB[0])
+        #     self.resolution['DB'] = resolution * pix_per_a
+        #     self.model['DB'] = self.model_DB
+        #     self.lamgrid['DB'] = self.lamgrid_DB
+        # except:
+        #     print('DB models not loaded.')
 
         if '+' not in specclass:
             self.isbinary = False;
@@ -121,8 +135,8 @@ class GFP:
         """
         teffs = label_array[:, 0];
         loggs = label_array[:, 1];
-        teffs = (teffs - 2500) / (100000 - 2500)
-        loggs = (loggs - 5) / (10 - 5)
+        teffs = (teffs - 5500) / (40000 - 5500)
+        loggs = (loggs - 6.5) / (9.5 - 6.5)
         return np.vstack((teffs, loggs)).T
 
     def inv_label_sc(self, label_array):
@@ -140,35 +154,35 @@ class GFP:
         """
         teffs = label_array[:, 0];
         loggs = label_array[:, 1];
-        teffs = (teffs * (100000 - 2500)) + 2500
-        loggs = (loggs * (10 - 5)) + 5
+        teffs = (teffs * (40000 - 5500)) + 5500
+        loggs = (loggs * (9.5 - 6.5)) + 6.5
         return np.vstack((teffs, loggs)).T
 
+    def spec_sc(self, spec):
+        return (spec - self.spec_min) / (self.spec_max - self.spec_min)
+
+    def inv_spec_sc(self, spec):
+        return spec * (self.spec_max - self.spec_min) + self.spec_min
+
     def generator(self, H, n_pix):
-        """
-        Basic 2-layer neural network to generate synthetic spectra.  
+        x = Input(shape=(2,))
+        y = Dense(H,activation='relu',trainable = True)(x)
+        y = Dense(H,activation='relu',trainable = True)(y)
+        y = Dense(H,activation='relu',trainable = True)(y)
+        out = Dense(n_pix,activation='linear',trainable = True)(y)
         
-        Parameters
-        ----------
-        H : int
-            Number of neurons in each hidden layer
-        n_pix : int
-            Number of pixels on the synthetic spectrum = number of neurons on the last layer. 
-        Returns
-        -------
-            keras `Model`
-                Keras neural network model instance
-        """
-        x = keras.layers.Input(shape=(2,))
-        y = keras.layers.Dense(H,activation='relu',trainable = True)(x)
-        y = keras.layers.Dense(H,activation='relu',trainable = True)(y)
-        y = keras.layers.Dense(H,activation='relu',trainable = True)(y)
-        out = keras.layers.Dense(n_pix,activation='linear',trainable = True)(y)
-        
-        model = keras.models.Model(inputs = x, outputs = out)
-        model.compile(optimizer = keras.optimizers.Adamax(), loss = 'mse', \
+        model = Model(inputs = x, outputs = out)
+        model.compile(optimizer = Adamax(), loss = 'mse', \
                       metrics = ['mae'])
         return model
+
+    def doppler_shift(self, wl, fl, dv):
+        c = 2.99792458e5
+        df = np.sqrt((1 - dv/c)/(1 + dv/c)) 
+        new_wl = wl * df
+        new_fl = np.interp(new_wl, wl, fl)
+        return new_fl
+
 
     def synth_spectrum_sampler(self, wl, teff, logg, rv, specclass = None):
         """
@@ -198,16 +212,13 @@ class GFP:
             specclass = self.specclass;
 
         label = self.label_sc(np.asarray(np.stack((teff,logg)).reshape(1,-1)))
-        synth = pyasl.dopplerShift(self.lamgrid[specclass],np.ravel(
-                        (
-                                self.model[specclass].predict(label))[0]
-                        ), rv, edgeHandling = 'FillValue', fillValue = np.nan
-                    )[0]
+        synth = self.model[specclass].predict(label)[0]
+        synth = 10**self.inv_spec_sc(synth)
+        synth = self.doppler_shift(self.lamgrid[specclass], synth, rv)
         synth =  (np.ravel(synth).astype('float64'))
-
         return synth
 
-    def spectrum_sampler(self, wl, teff, logg, rv, specclass = None):
+    def spectrum_sampler(self, wl, teff, logg, rv, *polyargs, specclass = None):
         """
         Wrapper function that talks to the generative neural network in scaled units, and also performs the Gaussian convolution to instrument resolution. 
         
@@ -234,7 +245,17 @@ class GFP:
         synth = self.synth_spectrum_sampler(self.lamgrid[specclass], teff, logg, rv, specclass)
         synth = scipy.ndimage.gaussian_filter1d(synth, self.resolution[specclass])
         func = interp1d(self.lamgrid[specclass], synth, fill_value = np.nan, bounds_error = False)
-        return func(wl)
+        synth =  func(wl)
+
+        # print(polyargs)
+
+        if self.cont_fixed:
+            synth = synth * polyval(wl/1000, self.poly_arg) / self.smooth_cont
+
+        if len(polyargs) > 0:
+            synth = synth * polyval(wl/1000, polyargs)
+
+        return synth
 
     def binary_sampler(self, wl, teff_1, logg_1, rv_1, teff_2, logg_2, rv_2, lf = 1, specclass = None):
         
@@ -281,7 +302,9 @@ class GFP:
 
     def fit_spectrum(self, wl, fl, ivar = None, nwalkers = 100, burn = 100, ndraws = 50, make_plot = True, threads = 1, \
                     plot_trace = False, init = 'de', prior_teff = None, mleburn = 50, savename = None, isbinary = None, mask_threshold = 100,
-                    normalize_DA = False, lines = ['alpha', 'beta', 'gamma', 'delta', 'eps', 'h8'], progress = True):
+                    mask_DA = False, lines = ['alpha', 'beta', 'gamma', 'delta', 'eps', 'h8'], progress = True,
+                    polyorder = 4, plot_init = False, plot_corner = False, plot_corner_full = False,
+                    cont_polyorder = 6):
 
         """
         Main fitting routine, takes a continuum-normalized spectrum and fits it with MCMC to recover steller labels. 
@@ -333,15 +356,24 @@ class GFP:
                 Returns the fitted stellar labels along with a reduced chi-square statistic with the format: [(Teff, e_teff), (logg, e_logg), redchi]
         """
 
+        self.cont_fixed = False
+
         if isbinary is None:
             isbinary == self.isbinary
 
-        if normalize_DA == True:
-            sp = SpecTools()
-            if ivar is None:
-                wl, fl = sp.normalize_balmer(wl, fl, ivar = None, lines = lines)
-            else:
-                wl, fl, ivar = sp.normalize_balmer(wl, fl, ivar, lines = lines)
+        wlbounds = self.lamgrid['DA'].min() + 5, self.lamgrid['DA'].max() - 5
+        in1,in2 = bisect_left(wl, wlbounds[0]), bisect_left(wl, wlbounds[1])
+
+        wl = wl[in1:in2]
+        fl = fl[in1:in2]
+        ivar = ivar[in1:in2]
+
+        # if normalize_DA == True:
+        #     sp = SpecTools()
+        #     if ivar is None:
+        #         wl, fl = sp.normalize_balmer(wl, fl, ivar = None, lines = lines)
+        #     else:
+        #         wl, fl, ivar = sp.normalize_balmer(wl, fl, ivar, lines = lines)
 
         if ivar is None:
             print('no inverse variance array provided, inferring ivar using the beta-sigma method. the chi-square likelihood will not be exact; treat returned uncertainties with caution!')
@@ -353,35 +385,51 @@ class GFP:
 
         prior_highs = [40000, 9.5, 1000, 40000, 9.5, 1000, 1]
 
+
+        mask = np.ones(len(wl))
+        self.mask = mask > 0
+        contmask = self.mask
+
         if not isbinary:
+
+            nstarparams = 3
 
             def lnlike(prms):
 
                 model = self.spectrum_sampler(wl,*prms)
 
-                nonan = (~np.isnan(model)) * (~np.isnan(fl)) * (~np.isnan(ivar))
-                diff = model[nonan] - fl[nonan]
-                chisq = np.sum(diff**2 * ivar[nonan])
+
+
+                diff = (model - fl)**2 * ivar
+
+                ### TEST MASKING
+
+                diff = diff[self.mask]
+
+                ################
+
+                chisq = np.sum(diff)
+
                 if np.isnan(chisq):
                     return -np.Inf
                 lnlike = -0.5 * chisq
                 return lnlike
 
-        elif isbinary:
-            def lnlike(prms):
+        # elif isbinary:
+        #     def lnlike(prms):
 
-                model = self.binary_sampler(wl,*prms)
+        #         model = self.binary_sampler(wl,*prms)
 
-                nonan = (~np.isnan(model)) * (~np.isnan(fl)) * (~np.isnan(ivar))
-                diff = model[nonan] - fl[nonan]
-                chisq = np.sum(diff**2 * ivar[nonan])
-                if np.isnan(chisq):
-                    return -np.Inf
-                lnlike = -0.5 * chisq
-                return lnlike
+        #         nonan = (~np.isnan(model)) * (~np.isnan(fl)) * (~np.isnan(ivar))
+        #         diff = model[nonan] - fl[nonan]
+        #         chisq = np.sum(diff**2 * ivar[nonan])
+        #         if np.isnan(chisq):
+        #             return -np.Inf
+        #         lnlike = -0.5 * chisq
+        #         return lnlike
 
         def lnprior(prms):
-            for jj in range(len(prms)):
+            for jj in range(nstarparams):
                 if prms[jj] < prior_lows[jj] or prms[jj] > prior_highs[jj]:
                     return -np.Inf
 
@@ -397,77 +445,153 @@ class GFP:
                 return -np.Inf
             return lp + lnlike(prms)
 
-        if isbinary:
-            ndim = 7
-            init_prms = [12000, 8, 0, 12000, 8, 0, 1]
-            param_names = ['$T_{eff, 1}$', '$\log{g}_1$', '$RV_1$', '$T_{eff, 2}$', '$\log{g}_2$', '$RV_2$', '$f_{2,1}$']
-        elif not isbinary:
-            ndim = 3
-            init_prms = [12000, 8, 0]
+        # if isbinary:
+        #     ndim = 7
+        #     init_prms = [12000, 8, 0, 12000, 8, 0, 1]
+        #     param_names = ['$T_{eff, 1}$', '$\log{g}_1$', '$RV_1$', '$T_{eff, 2}$', '$\log{g}_2$', '$RV_2$', '$f_{2,1}$']
+        if not isbinary:
+            ndim = nstarparams + polyorder + 1
+            init_prms = [25000, 8, 0]
+            init_prms.extend(polyfit(wl/1000, fl, cont_polyorder))
             param_names = ['$T_{eff}$', '$\log{g}$', '$RV$']
+            param_names.extend(['$c_%i$' % ii for ii in range(polyorder + 1)])
+
+
+        # bounds = [];
+        # for jj in range(nstarparams + polyorder + 1):
+        #     if jj < nstarparams:
+        #         bounds.append([prior_lows[jj], prior_highs[jj]])
+        #     else:
+        #         bounds.append([-np.inf, np.inf])
+
+        # bounds_lo = prior_lows[:nstarparams]
+        # bounds_hi = prior_highs[:nstarparams]
+
+        # for jj in range(polyorder + 1):
+        #     bounds_lo.append(-np.inf)
+        #     bounds_hi.append(np.inf)
+
+        # bounds = (bounds_lo, bounds_hi)
+
+        # print(init_prms)
+        # print(bounds)
+
+        nll = lambda *args: -lnprob(*args)
+        soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = 500))
+        print(soln.x)
+
+        # soln = scipy.optimize.curve_fit(self.spectrum_sampler, xdata = wl[mask], ydata = fl[mask],
+        #             p0 = init_prms, sigma = np.sqrt(1/ivar[mask]), absolute_sigma = True,
+        #                 bounds = bounds, method = 'trf', xtol = 1e-10, ftol = 1e-10)
+
+        plt.plot(wl, fl)
+        plt.plot(wl, self.spectrum_sampler(wl, *init_prms))
+        plt.plot(wl, self.spectrum_sampler(wl, *soln.x), 'r')
+        plt.show()
+
+        # fl = fl / polyval(wl/1000, soln.x[nstarparams:])
+        # ivar = ivar * polyval(wl/1000, soln.x[nstarparams:])**2
+
+        edges = [];
+        breakpoints = [];
+
+        if mask_DA:
+            mask = np.zeros(len(wl))
+            for line in lines:
+                c1 = self.centroid_dict[line] - self.distance_dict[line]
+                c2 = self.centroid_dict[line] + self.distance_dict[line]
+                mask += (wl > c1)*\
+                        (wl < c2)
+                edges.extend([c1, c2])
+                breakpoints.extend([bisect_left(wl, c2), bisect_left(wl, c1)])
+
+            self.mask = mask > 0
+            contmask = ~self.mask
+
+        smooth_cont = scipy.interpolate.interp1d(wl[contmask], self.spectrum_sampler(wl, *soln.x)[contmask])(wl)
+        self.poly_arg = soln.x[nstarparams:]
+
+        fl = fl / smooth_cont
+        ivar = ivar * smooth_cont**2
+
+        self.cont_fixed = True
+        self.smooth_cont = smooth_cont
+
+        init_prms = init_prms[:nstarparams]
+        init_prms.extend(polyfit(wl/1000, fl, polyorder))
+
+
+        #### CHANGE BELOW TO CURVE FIT TO GET COV MATRIX AND PLUG INTO EMCEE
+
+        nll = lambda *args: -lnprob(*args)
+        soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = 500))
+        print(soln.x)
 
         pos0 = np.zeros((nwalkers,ndim))
 
-        sampler = emcee.EnsembleSampler(nwalkers,ndim,lnprob,threads = threads)
+        sampler = emcee.EnsembleSampler(nwalkers,ndim,lnprob, threads = threads)
 
-        if init == 'de':
+        for jj in range(ndim):
+                pos0[:,jj] = (soln.x[jj] + 0.01*soln.x[jj]*np.random.normal(size = nwalkers))
+
+        # if init == 'de':
             
-            def residual(parvals):
-                model = self.spectrum_sampler(wl, parvals['teff'], parvals['logg'], parvals['rv'])
-                nonan = (~np.isnan(model)) * (~np.isnan(fl)) * (~np.isnan(ivar))
-                diff = model[nonan] - fl[nonan]
-                chisq = np.sum(diff**2 * ivar[nonan])
+        #     def residual(parvals):
+        #         model = self.spectrum_sampler(wl, parvals['teff'], parvals['logg'], parvals['rv'])
+        #         nonan = (~np.isnan(model)) * (~np.isnan(fl)) * (~np.isnan(ivar))
+        #         diff = model[nonan] - fl[nonan]
+        #         chisq = np.sum(diff**2 * ivar[nonan])
 
-                #print(np.sum(np.isnan(model)), np.sum(np.isnan(fl)), np.sum(np.isnan(ivar)))
+        #         #print(np.sum(np.isnan(model)), np.sum(np.isnan(fl)), np.sum(np.isnan(ivar)))
 
-                return chisq
+        #         return chisq
 
-            ## Cold Solution
+        #     ## Cold Solution
 
-            params = lmfit.Parameters()
-            params.add('teff', value = 10000, min = 6501, max = 15000)
-            params.add('logg', value = 8, min = 6.5, max = 9.5)
-            params.add('rv', value = 0, min = -1000, max = 1000)
-            fitter = lmfit.Minimizer(residual, params, nan_policy = 'omit')
-            res = fitter.minimize(method = 'differential_evolution')
-            cold_result = [res.params['teff'].value, res.params['logg'].value, res.params['rv'].value]
-            cold_chi = -2 * lnprob(cold_result)
+        #     params = lmfit.Parameters()
+        #     params.add('teff', value = 10000, min = 6501, max = 15000)
+        #     params.add('logg', value = 8, min = 6.5, max = 9.5)
+        #     params.add('rv', value = 0, min = -1000, max = 1000)
+        #     fitter = lmfit.Minimizer(residual, params, nan_policy = 'omit')
+        #     res = fitter.minimize(method = 'differential_evolution')
+        #     cold_result = [res.params['teff'].value, res.params['logg'].value, res.params['rv'].value]
+        #     cold_chi = -2 * lnprob(cold_result)
 
-            ## Hot solution
+        #     ## Hot solution
 
-            params['teff'].set(value = 25000, min = 15000, max = 39999)
-            fitter = lmfit.Minimizer(residual, params, nan_policy = 'omit')
-            res = fitter.minimize(method = 'differential_evolution')
-            hot_result = [res.params['teff'].value, res.params['logg'].value, res.params['rv'].value]
-            hot_chi = -2 * lnprob(hot_result)
+        #     params['teff'].set(value = 25000, min = 15000, max = 39999)
+        #     fitter = lmfit.Minimizer(residual, params, nan_policy = 'omit')
+        #     res = fitter.minimize(method = 'differential_evolution')
+        #     hot_result = [res.params['teff'].value, res.params['logg'].value, res.params['rv'].value]
+        #     hot_chi = -2 * lnprob(hot_result)
 
-            if cold_chi <= hot_chi:
-                result = cold_result
-            elif cold_chi > hot_chi:
-                result = hot_result
+        #     if cold_chi <= hot_chi:
+        #         result = cold_result
+        #     elif cold_chi > hot_chi:
+        #         result = hot_result
 
-            for jj in range(ndim):
-                pos0[:,jj] = (result[jj] + 0.001*np.random.normal(size = nwalkers))
+            # for jj in range(ndim):
+            #     pos0[:,jj] = (result[jj] + 0.001*np.random.normal(size = nwalkers))
 
-        elif init == 'unif':
-            for jj in range(ndim):
-                pos0[:,jj] = np.random.uniform(prior_lows[jj], prior_highs[jj], nwalkers)
-        elif init == 'mle':
-            for jj in range(ndim):
-                pos0[:,jj] = np.random.uniform(prior_lows[jj], prior_highs[jj], nwalkers)
+        # if init == 'unif':
+        #     for jj in range(ndim):
+        #         pos0[:,jj] = np.random.uniform(prior_lows[jj], prior_highs[jj], nwalkers)
+        # elif init == 'mle':
+        #     for jj in range(ndim):
+        #         pos0[:,jj] = np.random.uniform(prior_lows[jj], prior_highs[jj], nwalkers)
 
-            b = sampler.run_mcmc(pos0, mleburn, progress = progress)
-            lnprobs = sampler.get_log_prob(flat = True)
-            mle = sampler.flatchain[np.argmax(lnprobs)]
+        #     b = sampler.run_mcmc(pos0, mleburn, progress = progress)
+        #     lnprobs = sampler.get_log_prob(flat = True)
+        #     mle = sampler.flatchain[np.argmax(lnprobs)]
 
-            for jj in range(ndim):
-                pos0[:,jj] = (mle[jj] + 0.001*np.random.normal(size = nwalkers))
+        #     for jj in range(ndim):
+        #         pos0[:,jj] = (mle[jj] + 0.001*np.random.normal(size = nwalkers))
 
-            sampler.reset()
+        #     sampler.reset()
 
 
         #Initialize sampler
-        b = sampler.run_mcmc(pos0,burn, progress = progress)
+        b = sampler.run_mcmc(pos0, burn, progress = progress)
 
         sampler.reset()
 
@@ -497,29 +621,43 @@ class GFP:
         elif not isbinary:
             fit_fl = self.spectrum_sampler(wl, *mle)
 
-        if make_plot:
-            #fig,ax = plt.subplots(ndim, ndim, figsize = (15,15))
-            f = corner.corner(sampler.flatchain, labels = param_names, \
-                     label_kwargs = dict(fontsize =  16), quantiles = (0.16, 0.5, 0.84),
-                     )
-            plt.tight_layout()
+        if plot_corner:
+
+            plt.rcParams.update({'font.size': 12})
+
+            f = corner.corner(sampler.flatchain[:, :nstarparams], labels = param_names[:nstarparams], \
+                     label_kwargs = dict(fontsize =  12), quantiles = (0.16, 0.5, 0.84),
+                     show_titles = True, title_kwargs = dict(fontsize = 12))
+            #plt.tight_layout()
             if savename is not None:
                 plt.savefig(savename + '_corner.pdf', bbox_inches = 'tight')
             plt.show()
 
+        if plot_corner_full:
+
+            f = corner.corner(sampler.flatchain, labels = param_names, \
+                     label_kwargs = dict(fontsize =  12), quantiles = (0.16, 0.5, 0.84),
+                     show_titles = False)
+
+        if make_plot:
+            #fig,ax = plt.subplots(ndim, ndim, figsize = (15,15))
+
             if self.specclass == 'DA':
                 plt.figure(figsize = (8,7))
-                breakpoints = np.nonzero(np.diff(wl) > 5)[0]
-                breakpoints = np.concatenate(([0], breakpoints, [None]))
-
-                for kk in range(len(breakpoints) - 1):
-                    wl_seg = wl[breakpoints[kk] + 1:breakpoints[kk+1]]
-                    fl_seg = fl[breakpoints[kk] + 1:breakpoints[kk+1]]
-                    fit_fl_seg = fit_fl[breakpoints[kk] + 1:breakpoints[kk+1]]
+                #breakpoints = np.concatenate(([0], breakpoints, [None]))
+                breakpoints = np.flip(breakpoints)
+                self.breakpoints = breakpoints
+                print(breakpoints)
+                for kk in range(len(breakpoints)):
+                    if (kk + 1)%2 == 0:
+                        continue
+                    wl_seg = wl[breakpoints[kk]:breakpoints[kk+1]]
+                    fl_seg = fl[breakpoints[kk]:breakpoints[kk+1]]
+                    fit_fl_seg = fit_fl[breakpoints[kk]:breakpoints[kk+1]]
                     peak = int(len(wl_seg)/2)
                     delta_wl = wl_seg - wl_seg[peak]
-                    plt.plot(delta_wl, 1 + fl_seg - 0.35 * kk, 'k')
-                    plt.plot(delta_wl, 1 + fit_fl_seg - 0.35 * kk, 'r')
+                    plt.plot(delta_wl, 1 + fl_seg - 0.1 * kk, 'k')
+                    plt.plot(delta_wl, 1 + fit_fl_seg - 0.1 * kk, 'r')
                 plt.xlabel(r'$\mathrm{\Delta \lambda}\ (\mathrm{\AA})$')
                 plt.ylabel('Normalized Flux')
 
@@ -532,20 +670,30 @@ class GFP:
                 plt.text(0.79, 0.75, '$\chi_r^2$ = %.2f' % (redchi),
                          transform = plt.gca().transAxes, fontsize = 16)
 
-                if savename is not None:
-                    plt.savefig(savename + '_fit.pdf', bbox_inches = 'tight')
-            else:
-                plt.figure(figsize = (10,5))
-                plt.plot(wl, fl, 'k')
-                plt.plot(wl, fit_fl, 'r')
-                plt.ylabel('Normalized Flux')
-                plt.xlabel('Wavelength ($\mathrm{\AA}$)')
-                plt.minorticks_on()
-                plt.tick_params(which='major', length=10, width=1, direction='in', top = True, right = True)
-                plt.tick_params(which='minor', length=5, width=1, direction='in', top = True, right = True)
-                if savename is not None:
-                    plt.savefig(savename + '_fit.pdf', bbox_inches = 'tight')
-                plt.show()
+            #     if savename is not None:
+            #         plt.savefig(savename + '_fit.pdf', bbox_inches = 'tight')
+
+            plt.figure(figsize = (10,5))
+            plt.plot(wl, fl, 'k')
+            randidx = np.random.choice(len(sampler.flatchain), size = 10)
+            plt.plot(wl, fit_fl, 'r')
+
+            for idx in randidx:
+                label = sampler.flatchain[idx]
+                plt.plot(wl, self.spectrum_sampler(wl, *label), 'r', alpha = 0.25, lw = 0.5)
+            
+            plt.ylabel('Normalized Flux')
+            plt.xlabel('Wavelength ($\mathrm{\AA}$)')
+            plt.minorticks_on()
+            plt.tick_params(which='major', length=10, width=1, direction='in', top = True, right = True)
+            plt.tick_params(which='minor', length=5, width=1, direction='in', top = True, right = True)
+
+            for edge in edges:
+                plt.axvline(edge, linestyle = '--', color = 'k', lw = 0.5)
+
+            if savename is not None:
+                plt.savefig(savename + '_fit.pdf', bbox_inches = 'tight')
+            plt.show()
 
         return mle, stds, redchi
 
