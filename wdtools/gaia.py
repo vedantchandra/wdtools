@@ -98,6 +98,28 @@ def get_distance_samples(obj, nburn = 1e2, nsample = 1e3, progress = False):
     
     return dist
 
+def get_distance_mode(obj, L = 1350):
+    plx = obj['parallax'] / 1000
+    e_plx = obj['parallax_error'] / 1000
+    
+    a =  - 1 / e_plx**2
+    b = plx / e_plx**2
+    c = -2
+    d = 1 / L
+    
+    polycoef = [d,c,b,a]
+    
+    roots = np.roots(polycoef)
+    dists = [];
+    for root in roots:
+        if root.imag == 0:
+            dists.append(root.real)
+        else:
+            pass
+        
+    
+    return np.min(dists)
+
 def plot_orbits(name, obj, rv, e_rv, nmc = 10000, norbit = 50):
     present = 0 * u.Gyr
     plxfac = 1
