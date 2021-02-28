@@ -604,7 +604,7 @@ class GFP:
         sampler.reset()
 
         if verbose:
-            print('sampling mcmc...')
+            print('sampling posterior...')
         b = sampler.run_mcmc(b.coords, ndraws, progress = progress)
 
         if plot_trace:
