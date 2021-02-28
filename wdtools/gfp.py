@@ -93,6 +93,8 @@ class GFP:
         self.centroid_dict = dict(alpha = 6564.61, beta = 4862.68, gamma = 4341.68, delta = 4102.89, eps = 3971.20, h8 = 3890.12)
         self.distance_dict = dict(alpha = 250, beta = 250, gamma = 120, delta = 75, eps = 50, h8 = 25)
 
+        self.rv = 0
+
         if specclass == 'DB':
             raise Exception('DB models unfortunately under restricted access right now and unavailable in this package.')
 
@@ -176,13 +178,6 @@ class GFP:
                       metrics = ['mae'])
         return model
 
-    def doppler_shift(self, wl, fl, dv):
-        c = 2.99792458e5
-        df = np.sqrt((1 - dv/c)/(1 + dv/c)) 
-        new_wl = wl * df
-        new_fl = np.interp(new_wl, wl, fl)
-        return new_fl
-
 
     def synth_spectrum_sampler(self, wl, teff, logg, rv, specclass = None):
         """
@@ -214,11 +209,12 @@ class GFP:
         label = self.label_sc(np.asarray(np.stack((teff,logg)).reshape(1,-1)))
         synth = self.model[specclass].predict(label)[0]
         synth = 10**self.inv_spec_sc(synth)
-        synth = self.doppler_shift(self.lamgrid[specclass], synth, rv)
+        synth = self.sp.doppler_shift(self.lamgrid[specclass], synth, rv)
         synth =  (np.ravel(synth).astype('float64'))
+
         return synth
 
-    def spectrum_sampler(self, wl, teff, logg, rv, *polyargs, specclass = None):
+    def spectrum_sampler(self, wl, teff, logg, *polyargs, specclass = None):
         """
         Wrapper function that talks to the generative neural network in scaled units, and also performs the Gaussian convolution to instrument resolution. 
         
@@ -240,6 +236,11 @@ class GFP:
                 Synthetic spectrum with desired parameters, interpolated onto the supplied wavelength grid and convolved with the instrument resolution. 
         """
 
+        if self.cont_fixed:
+            rv = self.rv
+        else:
+            rv = 0
+
         if specclass is None:
             specclass = self.specclass;
         synth = self.synth_spectrum_sampler(self.lamgrid[specclass], teff, logg, rv, specclass)
@@ -250,7 +251,7 @@ class GFP:
         # print(polyargs)
 
         if self.cont_fixed:
-            mod_smooth_cont = scipy.interpolate.interp1d(wl[self.contmask],  synth[self.contmask])(wl)
+            mod_smooth_cont = np.interp(wl, wl[self.contmask],  synth[self.contmask])
             synth = synth / mod_smooth_cont
 
         if len(polyargs) > 0:
@@ -305,7 +306,7 @@ class GFP:
                     plot_trace = False, init = 'de', prior_teff = None, mleburn = 50, savename = None, isbinary = None, mask_threshold = 100,
                     mask_DA = False, lines = ['alpha', 'beta', 'gamma', 'delta', 'eps', 'h8'], progress = True,
                     polyorder = 4, plot_init = False, plot_corner = False, plot_corner_full = False,
-                    cont_polyorder = 6):
+                    cont_polyorder = 6, verbose = False):
 
         """
         Main fitting routine, takes a continuum-normalized spectrum and fits it with MCMC to recover steller labels. 
@@ -385,9 +386,9 @@ class GFP:
             std, _ = beq.betaSigma(fl, 1, 1)
             ivar = np.repeat(1 / std**2, len(fl))
 
-        prior_lows = [6500, 6.5, -1000, 6500, 6.5, -1000, 0]
+        prior_lows = [6500, 6.5, -10, 6500, 6.5, -10, 0]
 
-        prior_highs = [40000, 9.5, 1000, 40000, 9.5, 1000, 1]
+        prior_highs = [40000, 9.5, 10, 40000, 9.5, 10, 1]
 
         edges = [];
         breakpoints = [];
@@ -412,11 +413,11 @@ class GFP:
 
         if not isbinary:
 
-            nstarparams = 3
+            nstarparams = 2
 
             def lnlike(prms):
 
-                model = self.spectrum_sampler(wl,*prms)
+                model = self.spectrum_sampler(wl, *prms)
 
 
 
@@ -470,9 +471,9 @@ class GFP:
         #     init_prms = [12000, 8, 0, 12000, 8, 0, 1]
         #     param_names = ['$T_{eff, 1}$', '$\log{g}_1$', '$RV_1$', '$T_{eff, 2}$', '$\log{g}_2$', '$RV_2$', '$f_{2,1}$']
         if not isbinary:
-            init_prms = [15000, 8, 0]
+            init_prms = [15000, 8]
             init_prms.extend(chebfit(2*(wl - wl.min() / (wl.max())) - 1.0, fl, cont_polyorder))
-            param_names = ['$T_{eff}$', '$\log{g}$', '$RV$']
+            param_names = ['$T_{eff}$', '$\log{g}$']
             param_names.extend(['$c_%i$' % ii for ii in range(polyorder + 1)])
 
 
@@ -492,13 +493,14 @@ class GFP:
 
         # bounds = (bounds_lo, bounds_hi)
 
-        # print(init_prms)
         # print(bounds)
+
+        if verbose:
+            print('fitting continuum...')
 
         self.mask = np.ones(len(wl)) > 0
         nll = lambda *args: -lnprob(*args)
-        soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = 500))
-        print(soln.x)
+        soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = 1500))
 
         # soln = scipy.optimize.curve_fit(self.spectrum_sampler, xdata = wl[mask], ydata = fl[mask],
         #             p0 = init_prms, sigma = np.sqrt(1/ivar[mask]), absolute_sigma = True,
@@ -510,7 +512,7 @@ class GFP:
         self.mask = mask > 0
         contmask = ~self.mask
 
-        smooth_cont = scipy.interpolate.interp1d(wl[contmask], self.spectrum_sampler(wl, *soln.x)[contmask])(wl)
+        smooth_cont = np.interp(wl, wl[contmask], self.spectrum_sampler(wl, *soln.x)[contmask])
         self.poly_arg = soln.x[nstarparams:]
 
         if plot_init:
@@ -538,23 +540,34 @@ class GFP:
         # plt.plot(wl, 1 / np.sqrt(ivar))
         # plt.show()
 
+        if verbose:
+            print('fitting radial velocity...')
+
+        template = self.spectrum_sampler(wl, *soln.x)
+        self.rv = self.sp.get_rv(wl, fl, wl, template)
+        print('Radial Velocity = %i km/s' % self.rv)
 
         #### CHANGE BELOW TO CURVE FIT TO GET COV MATRIX AND PLUG INTO EMCEE
 
-        init_prms = [9000, 8, soln.x[2]]
+
+        if verbose:
+            print('fitting cool solution...')
+        init_prms = [9000, 8]
         init_prms.extend(np.zeros(polyorder))
         init_prms[nstarparams] = 1
         #print(init_prms)
         nll = lambda *args: -lnprob(*args)
-        cool_soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = 500))
+        cool_soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = 1000))
         cool_chi = -2 * lnprob(cool_soln.x)
         #print(cool_soln.x)
 
-        init_prms = [18000, 8, soln.x[2]]
+        if verbose:
+            print('fitting warm solution...')
+        init_prms = [18000, 8]
         init_prms.extend(np.zeros(polyorder))
         init_prms[nstarparams] = 1
         nll = lambda *args: -lnprob(*args)
-        warm_soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = 500))
+        warm_soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = 1000))
         warm_chi = -2 * lnprob(warm_soln.x)
         #print(warm_soln.x)
 
@@ -562,8 +575,13 @@ class GFP:
 
         if cool_chi < warm_chi:
             soln.x = cool_soln.x
+            tstr = 'cool'
         else:
             soln.x = warm_soln.x
+            tstr = 'warm'
+
+        if  verbose:
+            print('initializing at %s solution, T = %i K, logg = %.1f dex' % (tstr, soln.x[0], soln.x[1]))
 
 
         ndim = len(soln.x)
@@ -578,10 +596,15 @@ class GFP:
 
         #print(pos0.shape)
 
+        if verbose:
+            print('burning in chains...')
+
         b = sampler.run_mcmc(pos0, burn, progress = progress)
 
         sampler.reset()
 
+        if verbose:
+            print('sampling mcmc...')
         b = sampler.run_mcmc(b.coords, ndraws, progress = progress)
 
         if plot_trace:

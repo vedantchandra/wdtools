@@ -7,15 +7,14 @@ import pandas as pd
 import pickle
 import os
 import scipy
-from PyAstronomy.pyasl import crosscorrRV, quadExtreme, dopplerShift
-from scipy.interpolate import interp1d
 import lmfit
 from lmfit.models import LinearModel, VoigtModel, GaussianModel
 import numpy.polynomial.polynomial as poly
+from scipy.interpolate import interp1d
+from scipy.ndimage import gaussian_filter1d
+from scipy.signal import correlate
+from astropy import constants as c
 
-speed_light = 299792458 #m/s
-
-plt.rcParams.update({'font.size': 18})
 path = os.path.abspath(__file__)
 dir_path = os.path.dirname(path)
 
@@ -49,7 +48,10 @@ class SpecTools():
 
     def continuum_normalize(self, wl, fl, ivar = None):
         '''
-        Continuum-normalization with smoothing splines that avoid a pre-made list of absorption lines for DA and DB spectra. To normalize spectra that only have Balmer lines (DA), we recommend using the `normalize_balmer` function instead. Also crops the spectrum to the 3700 - 7000 Angstrom range. 
+        Continuum-normalization with smoothing splines that avoid a pre-made list of absorption 
+        lines for DA and DB spectra. To normalize spectra that only have Balmer lines (DA),
+         we recommend using the `normalize_balmer` function instead. Also crops the spectrum 
+         to the 3700 - 7000 Angstrom range. 
         
         Parameters
         ---------
@@ -63,7 +65,8 @@ class SpecTools():
         Returns
         -------
             tuple
-                Tuple of cropped wavelength, cropped and normalized flux, and (if ivar is not None) cropped and normalized inverse variance array. 
+                Tuple of cropped wavelength, cropped and normalized flux, and (if ivar is not None)
+                 cropped and normalized inverse variance array. 
 
         '''
 
@@ -94,7 +97,8 @@ class SpecTools():
     def normalize_line(self, wl, fl, ivar, centroid, distance, make_plot = False, return_centre = False):
 
         '''
-        Continuum-normalization of a single absorption line by fitting a linear model added to a Voigt profile to the spectrum, and dividing out the linear model. 
+        Continuum-normalization of a single absorption line by fitting a linear model added 
+        to a Voigt profile to the spectrum, and dividing out the linear model. 
         
         Parameters
         ---------
@@ -107,14 +111,16 @@ class SpecTools():
         centroid : float
             The theoretical centroid of the absorption line that is being fitted, in wavelength units.
         distance : float
-            Distance in Angstroms away from the line centroid to include in the fit. Should include the entire absorption line wings with minimal continum. 
+            Distance in Angstroms away from the line centroid to include in the fit. Should include 
+            the entire absorption line wings with minimal continum. 
         make_plot : bool, optional
             Whether to plot the linear + Voigt fit. Use for debugging. 
 
         Returns
         -------
             tuple
-                Tuple of cropped wavelength, cropped and normalized flux, and (if ivar is not None) cropped and normalized inverse variance array. 
+                Tuple of cropped wavelength, cropped and normalized flux, and (if ivar is not None) 
+                cropped and normalized inverse variance array. 
 
         '''
 
@@ -162,15 +168,17 @@ class SpecTools():
 
     def normalize_balmer(self, wl, fl, ivar = None, lines = ['alpha', 'beta', 'gamma', 'delta'], \
                          skylines = False, make_plot = False, make_subplot = False, make_stackedplot = False, \
-                             centroid_dict = dict(alpha = 6564.61, beta = 4862.68, gamma = 4341.68, delta = 4102.89, eps = 3971.20, h8 = 3890.12),
-                                distance_dict = dict(alpha = 300, beta = 200, gamma = 120, delta = 75, eps = 50, h8 = 25), sky_fill = np.nan):
+            centroid_dict = dict(alpha = 6564.61, beta = 4862.68, gamma = 4341.68, delta = 4102.89, eps = 3971.20, h8 = 3890.12),
+            distance_dict = dict(alpha = 300, beta = 200, gamma = 120, delta = 75, eps = 50, h8 = 25), sky_fill = np.nan):
         
 
         '''
         Continuum-normalization of any spectrum by fitting each line individually. 
 
-        Fits every absorption line by fitting a linear model added to a Voigt profile to the spectrum, and dividing out the linear model. 
-        All normalized lines are concatenated and returned. For statistical and plotting purposes, two adjacent lines should not have overlapping regions (governed by the `distance_dict`). 
+        Fits every absorption line by fitting a linear model added to a Voigt profile to 
+        the spectrum, and dividing out the linear model. 
+        All normalized lines are concatenated and returned. For statistical and plotting 
+        purposes, two adjacent lines should not have overlapping regions (governed by the `distance_dict`). 
         
         Parameters
         ---------
@@ -181,7 +189,8 @@ class SpecTools():
         ivar : array, optional
             Inverse variance array. If `None`, will return only the normalized wavelength and flux. 
         lines : array-like, optional
-            Array of which Balmer lines to include in the fit. Can be any combination of ['alpha', 'beta', 'gamma', 'delta', 'eps', 'h8']
+            Array of which Balmer lines to include in the fit. Can be any combination of 
+            ['alpha', 'beta', 'gamma', 'delta', 'eps', 'h8']
         skylines : bool, optional
             If True, masks out pre-selected telluric features and replace them with `np.nan`. 
         make_plot : bool, optional
@@ -261,28 +270,6 @@ class SpecTools():
         idx = (np.abs(array - value)).argmin()
         return array[idx]
 
-    def rv_corr(self, wl, normflux):
-        alphaline = self.find_nearest(wl,self.halpha)
-        betaline = self.find_nearest(wl,self.hbeta)
-        gammaline = self.find_nearest(wl,self.hgamma)
-        deltaline = self.find_nearest(wl,self.hdelta)
-        cores = (wl == alphaline) + (wl == betaline) + (wl == gammaline) + (wl == deltaline)
-        cores = cores.astype(int)
-        xcorrs = crosscorrRV(wl,1-normflux,wl,cores, -1250, 1250, 50, 'doppler', skipedge = 25)
-        corrs = xcorrs[1]
-        rvs = xcorrs[0]
-        # plt.plot(rvs,corrs)
-        try:
-            p = np.polyfit(rvs, corrs, 2)
-            specrv = - p[1] / (2*p[0])
-            # plt.plot(rvs,np.polyval(p,rvs))
-            # plt.axvline(specrv)
-            # print(specrv)
-        except:
-            print('find rv failed. defaulting to zero')
-            specrv = 0
-        shift_flux,shift_wl = dopplerShift(wl,normflux,specrv, edgeHandling = 'fillValue', fillValue = 1)
-        return shift_wl,shift_flux
 
     def interpolate(self, wl, flux, target_wl = np.arange(4000,8000)):
         func = interp1d(wl, flux, kind='linear', assume_sorted = True, fill_value = 'extrapolate')
@@ -437,10 +424,6 @@ class SpecTools():
             #plt.axvline(centroid, color = 'k', linestyle = '--')
             plt.axvline(mean_centre, color = 'r', linestyle = '--')
             plt.tick_params(bottom=True, top=True, left=True, right=True)
-            # plt.text(0.65, 0.1, '$\mathrm{v_r}$ = %i ± %i km/s'\
-            #          %(speed_light*1e-3*(mean_centre - centroid)/centroid, speed_light*1e-3*(sigma_sample/centroid)),\
-            #         fontsize = 22, transform = plt.gca().transAxes)
-            #plt.xlim(adaptive_centroid - 10, adaptive_centroid + 10)
             plt.minorticks_on()
             plt.tick_params(which='major', length=10, width=1, direction='in', top = True, right = True)
             plt.tick_params(which='minor', length=5, width=1, direction='in', top = True, right = True)
@@ -450,3 +433,32 @@ class SpecTools():
             #print(np.isnan(np.array(errors)))
             
         return mean_centre, final_centre, sigma_final_centre, sigma_propagated, sigma_sample
+
+    def doppler_shift(self, wl, fl, dv):
+        c = 2.99792458e5
+        df = np.sqrt((1 - dv/c)/(1 + dv/c)) 
+        new_wl = wl * df
+        new_fl = np.interp(new_wl, wl, fl)
+        return new_fl
+
+    def xcorr_rv(self, wl, fl, temp_wl, temp_fl, init_rv = 0, rv_range = 500, npoint = None):
+        if npoint is None:
+            npoint = int(2 * rv_range)
+        rvgrid = np.linspace(init_rv - rv_range, init_rv + rv_range, npoint)
+        cc = np.zeros(npoint)
+        for ii,rv in enumerate(rvgrid):
+            shift_model = self.doppler_shift(temp_wl, temp_fl, rv)
+            corr = np.corrcoef(fl, shift_model)[1, 0]
+            cc[ii] = corr
+        return rvgrid, cc
+
+    def quad_max(self, rv, cc):
+        pfit = np.polynomial.polynomial.polyfit(rv, cc, 2)
+        max_rv = - pfit[1] / (2 * pfit[2])
+        return max_rv
+
+    def get_rv(self, wl, fl, temp_wl, temp_fl, r1 = 1000, p1 = 100, r2 = 100, p2 = 200): # IMPLEMENT UNCERTAINTIES AT SPECTRUM LEVEL
+        rv, cc = self.xcorr_rv(wl, fl, temp_wl, temp_fl, init_rv = 0, rv_range = r1, npoint = p1)
+        rv_guess = self.quad_max(rv, cc)
+        rv, cc = self.xcorr_rv(wl, fl, temp_wl, temp_fl, init_rv = rv_guess, rv_range = r2, npoint = p2)
+        return self.quad_max(rv, cc)
