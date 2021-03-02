@@ -594,8 +594,6 @@ class GFP:
         for jj in range(ndim):
                 pos0[:,jj] = (soln.x[jj] + 1e-5*soln.x[jj]*np.random.normal(size = nwalkers))
 
-        #print(pos0.shape)
-
         if verbose:
             print('burning in chains...')
 
