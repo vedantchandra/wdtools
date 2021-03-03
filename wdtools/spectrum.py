@@ -453,8 +453,17 @@ class SpecTools():
         return rvgrid, cc
 
     def quad_max(self, rv, cc):
-        pfit = np.polynomial.polynomial.polyfit(rv, cc, 2)
-        max_rv = - pfit[1] / (2 * pfit[2])
+        maxpt = np.argmax(cc)
+        max_rv = rv[maxpt]
+        # in1 = maxpt - 5
+        # in2 = maxpt + 5
+        # rv,cc = rv[in1:in2], cc[in1:in2]
+        # pfit = np.polynomial.polynomial.polyfit(rv, cc, 2)
+        # max_rv = - pfit[1] / (2 * pfit[2])
+
+        # plt.plot(rv, cc)
+        # plt.axvline(max_rv)
+        # plt.show()
         return max_rv
 
     def get_rv(self, wl, fl, temp_wl, temp_fl, r1 = 1000, p1 = 100, r2 = 100, p2 = 200): # IMPLEMENT UNCERTAINTIES AT SPECTRUM LEVEL

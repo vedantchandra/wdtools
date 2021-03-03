@@ -91,7 +91,7 @@ class GFP:
         self.cont_fixed = False
 
         self.centroid_dict = dict(alpha = 6564.61, beta = 4862.68, gamma = 4341.68, delta = 4102.89, eps = 3971.20, h8 = 3890.12)
-        self.distance_dict = dict(alpha = 250, beta = 250, gamma = 120, delta = 75, eps = 50, h8 = 25)
+        self.distance_dict = dict(alpha = 300, beta = 250, gamma = 120, delta = 75, eps = 50, h8 = 30)
 
         self.rv = 0
 
@@ -251,7 +251,10 @@ class GFP:
         # print(polyargs)
 
         if self.cont_fixed:
-            mod_smooth_cont = np.interp(wl, wl[self.contmask],  synth[self.contmask])
+
+            spline_pars = scipy.interpolate.splrep(wl[self.contmask], synth[self.contmask] / np.median(synth[self.contmask]),
+                                                k = 3, s = self.smooth)
+            mod_smooth_cont = scipy.interpolate.splev(wl, spline_pars) * np.median(synth[self.contmask])
             synth = synth / mod_smooth_cont
 
         if len(polyargs) > 0:
@@ -259,54 +262,105 @@ class GFP:
 
         return synth
 
-    def binary_sampler(self, wl, teff_1, logg_1, rv_1, teff_2, logg_2, rv_2, lf = 1, specclass = None):
+    def normalize_DA(self, wl, fl, ivar = None, cont_polyorder = 3, plot = False,
+                            lines = ['alpha', 'beta', 'gamma', 'delta', 'eps', 'h8'],
+                            maxfev = 500, smooth = 0, crop = True, return_soln = False):
+
+        self.smooth = smooth # Spline smoothing factor
+
+        ## RESTRICT TO NN DOMAIN ##########
+
+        wlbounds = self.lamgrid['DA'].min() + 5, self.lamgrid['DA'].max() - 5
+        in1,in2 = bisect_left(wl, wlbounds[0]), bisect_left(wl, wlbounds[1])
+
+        wl = wl[in1:in2]
+        fl = fl[in1:in2]
+        if ivar is not None: ivar = ivar[in1:in2]
+
+        ##################################
+
+        edges = [];
+        breakpoints = [];
+
+        mask = np.zeros(len(wl))
+        for line in lines:
+            c1 = self.centroid_dict[line] - self.distance_dict[line]
+            c2 = self.centroid_dict[line] + self.distance_dict[line]
+            mask += (wl > c1)*\
+                    (wl < c2)
+            edges.extend([c1, c2])
+            breakpoints.extend([bisect_left(wl, c2), bisect_left(wl, c1)])
+
+        self.breakpoints = breakpoints
+        self.contmask = ~(mask > 0) # Select continuum pixels
+        self.edges = edges
         
-        """
-        Under development, do not use.
-        """
+        init_prms = [12000, 8]
+        bounds = [(6500, 39000), (6.5, 9.5)]
+        init_prms.extend(chebfit(2*(wl - wl.min() / (wl.max())) - 1.0, fl, cont_polyorder))
+        bounds.extend([(-np.Inf, np.Inf) for jj in range(cont_polyorder + 1)])
 
-        if specclass is None:
-            specclass = self.specclass;
+        self.mask = np.ones(len(wl)) > 0 ## FIT FULL SPECTRUM FOR CONTINUUM
 
-        if isinstance(specclass,str):
-            specclass = [specclass, specclass]
+        def residual(params):
+            if params[0] < 6500 or params[0] > 39000 or params[1] < 6.5 or params[1] > 9.5:
+                resid = 1e10
+            else:
+                resid = (fl - self.spectrum_sampler(wl, *params))[self.contmask]
+            if ivar is None: 
+                chi2 = np.sum(resid**2)
+            else: 
+                chi2 = np.sum(resid**2 * ivar[self.contmask])
+            return chi2
 
-        bin_lamgrid = np.linspace(3500, 7000, 14000)
+        soln = scipy.optimize.minimize(residual, init_prms, method = 'Nelder-Mead', options = dict(maxfev = maxfev),
+                            )
 
-        normfl_1 = self.synth_spectrum_sampler(self.lamgrid[specclass[0]], teff_1, logg_1, rv_1, specclass[0])
-        func1 = interp1d(self.lamgrid[specclass[0]], normfl_1, fill_value = 1, bounds_error = False)
-        normfl_1 = func1(bin_lamgrid)
+        self.mask = ~self.contmask
 
-        normfl_2 = self.synth_spectrum_sampler(self.lamgrid[specclass[1]], teff_2, logg_2, rv_2, specclass[1])
-        func2 = interp1d(self.lamgrid[specclass[1]], normfl_2, fill_value = 1, bounds_error = False)
-        normfl_2 = func2(bin_lamgrid)
+        model = self.spectrum_sampler(wl, *soln.x)[self.contmask]
+        spline_pars = scipy.interpolate.splrep(wl[self.contmask], model / np.median(model),
+                                                k = 3, s = self.smooth)
 
-        continuum_1 = self.blackbody(bin_lamgrid, teff_1) * 1e-14
-        continuum_2 = self.blackbody(bin_lamgrid, teff_2) * 1e-14
+        smooth_cont = scipy.interpolate.splev(wl, spline_pars) * np.median(model)
 
-        fullspec_1 = normfl_1 * continuum_1 
-        fullspec_2 = normfl_2 * continuum_2
+        if plot:
+            plt.plot(wl, fl)
+            plt.plot(wl, smooth_cont)
+            plt.show()
 
-        summed_spectrum = (fullspec_1 + lf * fullspec_2) # FL RATIO
+        fl = fl / smooth_cont
 
-        # _,finalspec = self.sp.normalize_balmer(self.lamgrid[specclass], summed_spectrum,
-        #                     lines = ['alpha', 'beta', 'gamma', 'delta', 'eps','h8'],
-        #                                  skylines = False, make_subplot = False)
+        if crop:
+            wl = wl[(breakpoints[-1] - 5):(breakpoints[0] + 5)]
+            fl = fl[(breakpoints[-1] - 5):(breakpoints[0] + 5)]
+            self.contmask = self.contmask[(breakpoints[-1] - 5):(breakpoints[0] + 5)]
+            self.mask = ~self.contmask
+        if plot:
+            plt.plot(wl, fl)
+            plt.show()
 
-        bin_lamgrid, finalspec = self.sp.continuum_normalize(bin_lamgrid, summed_spectrum)
+        ret = [wl, fl]
+
+        if ivar is not None:
+            ivar = ivar * smooth_cont**2
+            if crop: ivar = ivar[(breakpoints[-1] - 5):(breakpoints[0] + 5)]
+            ret.append(ivar)
         
-        resolution = self.res_ang * (bin_lamgrid[1] - bin_lamgrid[0])
+        if return_soln:
 
-        synth = scipy.ndimage.gaussian_filter1d(finalspec, resolution)
-        func = interp1d(bin_lamgrid, synth, fill_value = np.nan, bounds_error = False)
-        
-        return func(wl)
+            if soln.x[0] < 6500 or soln.x[0] > 39000 or soln.x[1] < 6.5 or soln.x[1] > 9.5:
+                print('continuum stellar solution out of bounds of NN, do not trust') 
+            ret.append(soln.x)
 
-    def fit_spectrum(self, wl, fl, ivar = None, nwalkers = 100, burn = 100, ndraws = 50, make_plot = True, threads = 1, \
-                    plot_trace = False, init = 'de', prior_teff = None, mleburn = 50, savename = None, isbinary = None, mask_threshold = 100,
-                    mask_DA = False, lines = ['alpha', 'beta', 'gamma', 'delta', 'eps', 'h8'], progress = True,
-                    polyorder = 4, plot_init = False, plot_corner = False, plot_corner_full = False,
-                    cont_polyorder = 6, verbose = False):
+        return ret
+
+
+    def fit_spectrum(self, wl, fl, ivar = None, nwalkers = 50, burn = 50, ndraws = 25, make_plot = True, threads = 1, \
+                    plot_trace = False, prior_teff = None, savename = None, isbinary = None, mask_threshold = 100,
+                    DA = True, progress = True,
+                    polyorder = 4, plot_init = False, plot_corner = False, plot_corner_full = False, verbose = True,
+                    norm_kw = {}):
 
         """
         Main fitting routine, takes a continuum-normalized spectrum and fits it with MCMC to recover steller labels. 
@@ -363,91 +417,32 @@ class GFP:
         if isbinary is None:
             isbinary == self.isbinary
 
-        wlbounds = self.lamgrid['DA'].min() + 5, self.lamgrid['DA'].max() - 5
-        in1,in2 = bisect_left(wl, wlbounds[0]), bisect_left(wl, wlbounds[1])
-
-        wl = wl[in1:in2]
-        fl = fl[in1:in2]
-        ivar = ivar[in1:in2]
-
-        # fl = fl / np.median(fl)
-        # ivar = ivar * np.median(fl)**2
-
-        # if normalize_DA == True:
-        #     sp = SpecTools()
-        #     if ivar is None:
-        #         wl, fl = sp.normalize_balmer(wl, fl, ivar = None, lines = lines)
-        #     else:
-        #         wl, fl, ivar = sp.normalize_balmer(wl, fl, ivar, lines = lines)
-
-        if ivar is None:
+        if ivar is None: # REPLACE THIS WITH YOUR OWN FUNCTION, REMOVE PYASL DEPENDENCE
             print('no inverse variance array provided, inferring ivar using the beta-sigma method. the chi-square likelihood will not be exact; treat returned uncertainties with caution!')
             beq = pyasl.BSEqSamp()
             std, _ = beq.betaSigma(fl, 1, 1)
             ivar = np.repeat(1 / std**2, len(fl))
 
-        prior_lows = [6500, 6.5, -10, 6500, 6.5, -10, 0]
+        prior_lows = [6500, 6.5]
 
-        prior_highs = [40000, 9.5, 10, 40000, 9.5, 10, 1]
+        prior_highs = [40000, 9.5]
 
-        edges = [];
-        breakpoints = [];
+        ###### REFACTOR BELOW INTO CONTNORM ################
 
-        if mask_DA:
-            mask = np.zeros(len(wl))
-            for line in lines:
-                c1 = self.centroid_dict[line] - self.distance_dict[line]
-                c2 = self.centroid_dict[line] + self.distance_dict[line]
-                mask += (wl > c1)*\
-                        (wl < c2)
-                edges.extend([c1, c2])
-                breakpoints.extend([bisect_left(wl, c2), bisect_left(wl, c1)])
+        nstarparams = 2
 
-            self.contmask = ~(mask > 0)
+        def lnlike(prms):
 
-        #smooth_cont = scipy.interpolate.interp1d(wl[contmask], fl[contmask])(wl)
-        #fl = fl / smooth_cont
-        #ivar = ivar * smooth_cont**2
+            model = self.spectrum_sampler(wl, *prms)
 
-        self.mask = np.ones(len(wl)) > 0
+            diff = (model - fl)**2 * ivar
+            diff = diff[self.mask]
+            chisq = np.sum(diff)
 
-        if not isbinary:
-
-            nstarparams = 2
-
-            def lnlike(prms):
-
-                model = self.spectrum_sampler(wl, *prms)
-
-
-
-                diff = (model - fl)**2 * ivar
-
-                ### TEST MASKING
-
-                diff = diff[self.mask]
-
-                ################
-
-                chisq = np.sum(diff)
-
-                if np.isnan(chisq):
-                    return -np.Inf
-                lnlike = -0.5 * chisq
-                return lnlike
-
-        # elif isbinary:
-        #     def lnlike(prms):
-
-        #         model = self.binary_sampler(wl,*prms)
-
-        #         nonan = (~np.isnan(model)) * (~np.isnan(fl)) * (~np.isnan(ivar))
-        #         diff = model[nonan] - fl[nonan]
-        #         chisq = np.sum(diff**2 * ivar[nonan])
-        #         if np.isnan(chisq):
-        #             return -np.Inf
-        #         lnlike = -0.5 * chisq
-        #         return lnlike
+            if np.isnan(chisq):
+                return -np.Inf
+            lnlike = -0.5 * chisq
+            return lnlike
 
         def lnprior(prms):
             for jj in range(nstarparams):
@@ -466,15 +461,11 @@ class GFP:
                 return -np.Inf
             return lp + lnlike(prms)
 
-        # if isbinary:
-        #     ndim = 7
-        #     init_prms = [12000, 8, 0, 12000, 8, 0, 1]
-        #     param_names = ['$T_{eff, 1}$', '$\log{g}_1$', '$RV_1$', '$T_{eff, 2}$', '$\log{g}_2$', '$RV_2$', '$f_{2,1}$']
-        if not isbinary:
-            init_prms = [15000, 8]
-            init_prms.extend(chebfit(2*(wl - wl.min() / (wl.max())) - 1.0, fl, cont_polyorder))
-            param_names = ['$T_{eff}$', '$\log{g}$']
-            param_names.extend(['$c_%i$' % ii for ii in range(polyorder + 1)])
+
+        # init_prms = list(init_soln[0:2])
+        # init_prms.extend(chebfit(2*(wl - wl.min() / (wl.max())) - 1.0, fl, cont_polyorder))
+        param_names = ['$T_{eff}$', '$\log{g}$']
+        param_names.extend(['$c_%i$' % ii for ii in range(polyorder + 1)])
 
 
         # bounds = [];
@@ -495,41 +486,15 @@ class GFP:
 
         # print(bounds)
 
-        if verbose:
+        if verbose: 
             print('fitting continuum...')
 
-        self.mask = np.ones(len(wl)) > 0
-        nll = lambda *args: -lnprob(*args)
-        soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = 1500))
+        if DA:
+            wl, fl, ivar, init_soln = self.normalize_DA(wl, fl, ivar, return_soln = True, **norm_kw)
 
-        # soln = scipy.optimize.curve_fit(self.spectrum_sampler, xdata = wl[mask], ydata = fl[mask],
-        #             p0 = init_prms, sigma = np.sqrt(1/ivar[mask]), absolute_sigma = True,
-        #                 bounds = bounds, method = 'trf', xtol = 1e-10, ftol = 1e-10)
-
-        # fl = fl / polyval(wl/1000, soln.x[nstarparams:])
-        # ivar = ivar * polyval(wl/1000, soln.x[nstarparams:])**2
-
-        self.mask = mask > 0
-        contmask = ~self.mask
-
-        smooth_cont = np.interp(wl, wl[contmask], self.spectrum_sampler(wl, *soln.x)[contmask])
-        self.poly_arg = soln.x[nstarparams:]
-
-        if plot_init:
-            plt.figure(figsize = (10, 8))
-            plt.plot(wl, fl, 'k', label = 'Data')
-            plt.plot(wl, self.spectrum_sampler(wl, *init_prms), label = 'Initial Guess')
-            plt.plot(wl, self.spectrum_sampler(wl, *soln.x), 'r', label = 'Continuum Fit')
-            plt.plot(wl, smooth_cont, 'g', label = 'Smooth Continuum')
-            plt.legend()
-            plt.show()
-
-
-        fl = fl / smooth_cont
-        ivar = ivar * smooth_cont**2
-
+        if verbose:
+            print('initial guess: T = %i, logg = %.2f' % (init_soln[0], init_soln[1]))
         self.cont_fixed = True
-        self.smooth_cont = smooth_cont
 
         # plt.plot(wl, fl)
         # plt.plot(wl, self.spectrum_sampler(wl, *[17000, 7.9, 10]))
@@ -543,9 +508,11 @@ class GFP:
         if verbose:
             print('fitting radial velocity...')
 
-        template = self.spectrum_sampler(wl, *soln.x)
+        template = self.spectrum_sampler(wl, *init_soln[0:2])
         self.rv = self.sp.get_rv(wl, fl, wl, template)
         print('Radial Velocity = %i km/s' % self.rv)
+
+        ## CORRECT RV
 
         #### CHANGE BELOW TO CURVE FIT TO GET COV MATRIX AND PLUG INTO EMCEE
 
@@ -555,36 +522,35 @@ class GFP:
         init_prms = [9000, 8]
         init_prms.extend(np.zeros(polyorder))
         init_prms[nstarparams] = 1
-        #print(init_prms)
         nll = lambda *args: -lnprob(*args)
         cool_soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = 1000))
         cool_chi = -2 * lnprob(cool_soln.x)
-        #print(cool_soln.x)
+        if verbose:
+            print('cool solution: T = %i K, logg = %.1f dex, chi2 = %.1f' % (cool_soln.x[0], cool_soln.x[1], cool_chi))
 
         if verbose:
             print('fitting warm solution...')
-        init_prms = [18000, 8]
+        init_prms = [17000, 8]
         init_prms.extend(np.zeros(polyorder))
         init_prms[nstarparams] = 1
         nll = lambda *args: -lnprob(*args)
         warm_soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = 1000))
         warm_chi = -2 * lnprob(warm_soln.x)
-        #print(warm_soln.x)
-
-        #print(cool_chi, warm_chi)
+        if verbose:
+            print('warm solution: T = %i K, logg = %.1f dex, chi2 = %.1f' % (warm_soln.x[0], warm_soln.x[1], warm_chi))
 
         if cool_chi < warm_chi:
-            soln.x = cool_soln.x
+            soln = cool_soln.x
             tstr = 'cool'
         else:
-            soln.x = warm_soln.x
+            soln = warm_soln.x
             tstr = 'warm'
 
         if  verbose:
-            print('initializing at %s solution, T = %i K, logg = %.1f dex' % (tstr, soln.x[0], soln.x[1]))
+            print('initializing at %s solution, T = %i K, logg = %.1f dex' % (tstr, soln[0], soln[1]))
 
 
-        ndim = len(soln.x)
+        ndim = len(soln)
         
         sampler = emcee.EnsembleSampler(nwalkers,ndim,lnprob, threads = threads)
 
@@ -592,7 +558,7 @@ class GFP:
 
 
         for jj in range(ndim):
-                pos0[:,jj] = (soln.x[jj] + 1e-5*soln.x[jj]*np.random.normal(size = nwalkers))
+                pos0[:,jj] = (soln[jj] + 1e-2*soln[jj]*np.random.normal(size = nwalkers))
 
         if verbose:
             print('burning in chains...')
@@ -652,9 +618,13 @@ class GFP:
 
             if self.specclass == 'DA':
                 plt.figure(figsize = (8,7))
-                #breakpoints = np.concatenate(([0], breakpoints, [None]))
+                breakpoints = [];
+                for kk in range(len(self.edges)):
+                    if (kk + 1)%2 == 0:
+                        continue
+                    breakpoints.append(bisect_left(wl, self.edges[kk+1]))
+                    breakpoints.append(bisect_left(wl, self.edges[kk]))
                 breakpoints = np.flip(breakpoints)
-                self.breakpoints = breakpoints
                 print(breakpoints)
                 for kk in range(len(breakpoints)):
                     if (kk + 1)%2 == 0:
@@ -674,7 +644,7 @@ class GFP:
         
                 plt.text(0.65, 0.85, '$\log{g} = %.2f \pm %.2f $' % (mle[1], stds[1]),
                          transform = plt.gca().transAxes, fontsize = 16)
-                
+                 
                 plt.text(0.79, 0.75, '$\chi_r^2$ = %.2f' % (redchi),
                          transform = plt.gca().transAxes, fontsize = 16)
 
@@ -696,12 +666,15 @@ class GFP:
             plt.tick_params(which='major', length=10, width=1, direction='in', top = True, right = True)
             plt.tick_params(which='minor', length=5, width=1, direction='in', top = True, right = True)
 
-            for edge in edges:
+            for edge in self.edges:
                 plt.axvline(edge, linestyle = '--', color = 'k', lw = 0.5)
 
             if savename is not None:
                 plt.savefig(savename + '_fit.pdf', bbox_inches = 'tight')
             plt.show()
+
+        self.cont_fixed = False
+        self.rv = 0 # RESET THESE PARAMETERS
 
         return mle, stds, redchi
 
