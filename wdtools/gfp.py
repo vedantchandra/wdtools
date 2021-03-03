@@ -91,7 +91,7 @@ class GFP:
         self.cont_fixed = False
 
         self.centroid_dict = dict(alpha = 6564.61, beta = 4862.68, gamma = 4341.68, delta = 4102.89, eps = 3971.20, h8 = 3890.12)
-        self.distance_dict = dict(alpha = 300, beta = 250, gamma = 120, delta = 75, eps = 50, h8 = 30)
+        self.distance_dict = dict(alpha = 250, beta = 200, gamma = 85, delta = 70, eps = 45, h8 = 35)
 
         self.rv = 0
 
@@ -266,6 +266,34 @@ class GFP:
                             lines = ['alpha', 'beta', 'gamma', 'delta', 'eps', 'h8'],
                             maxfev = 500, smooth = 0, crop = True, return_soln = False):
 
+        '''
+        Continuum-normalization of a DA white dwarf spectrum by fitting a combination of the 
+        model spectra and Chebyshev polynomials. 
+        
+        Parameters
+        ---------
+        wl : array
+            Wavelength array of spectrum
+        fl : array
+            Flux array of spectrum
+        ivar : array, optional
+            Inverse variance array. If `None`, will return only the normalized wavelength and flux. 
+        centroid : float
+            The theoretical centroid of the absorption line that is being fitted, in wavelength units.
+        distance : float
+            Distance in Angstroms away from the line centroid to include in the fit. Should include 
+            the entire absorption line wings with minimal continum. 
+        make_plot : bool, optional
+            Whether to plot the linear + Voigt fit. Use for debugging. 
+
+        Returns
+        -------
+            tuple
+                Tuple of cropped wavelength, cropped and normalized flux, and (if ivar is not None) 
+                cropped and normalized inverse variance array. 
+
+        '''
+
         self.smooth = smooth # Spline smoothing factor
 
         ## RESTRICT TO NN DOMAIN ##########
@@ -359,8 +387,8 @@ class GFP:
     def fit_spectrum(self, wl, fl, ivar = None, nwalkers = 50, burn = 50, ndraws = 25, make_plot = True, threads = 1, \
                     plot_trace = False, prior_teff = None, savename = None, isbinary = None, mask_threshold = 100,
                     DA = True, progress = True,
-                    polyorder = 4, plot_init = False, plot_corner = False, plot_corner_full = False, verbose = True,
-                    norm_kw = {}):
+                    polyorder = 2, plot_init = False, plot_corner = False, plot_corner_full = False, verbose = True,
+                    norm_kw = {}, mcmc = False):
 
         """
         Main fitting routine, takes a continuum-normalized spectrum and fits it with MCMC to recover steller labels. 
@@ -510,6 +538,7 @@ class GFP:
 
         template = self.spectrum_sampler(wl, *init_soln[0:2])
         self.rv = self.sp.get_rv(wl, fl, wl, template)
+        star_rv = self.rv
         print('Radial Velocity = %i km/s' % self.rv)
 
         ## CORRECT RV
@@ -520,8 +549,9 @@ class GFP:
         if verbose:
             print('fitting cool solution...')
         init_prms = [9000, 8]
-        init_prms.extend(np.zeros(polyorder))
-        init_prms[nstarparams] = 1
+        if polyorder > 0:
+            init_prms.extend(np.zeros(polyorder))
+            init_prms[nstarparams] = 1
         nll = lambda *args: -lnprob(*args)
         cool_soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = 1000))
         cool_chi = -2 * lnprob(cool_soln.x)
@@ -531,8 +561,9 @@ class GFP:
         if verbose:
             print('fitting warm solution...')
         init_prms = [17000, 8]
-        init_prms.extend(np.zeros(polyorder))
-        init_prms[nstarparams] = 1
+        if polyorder > 0:
+            init_prms.extend(np.zeros(polyorder))
+            init_prms[nstarparams] = 1
         nll = lambda *args: -lnprob(*args)
         warm_soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = 1000))
         warm_chi = -2 * lnprob(warm_soln.x)
@@ -541,77 +572,81 @@ class GFP:
 
         if cool_chi < warm_chi:
             soln = cool_soln.x
+            chi = cool_chi
             tstr = 'cool'
         else:
             soln = warm_soln.x
+            chi = warm_chi
             tstr = 'warm'
 
-        if  verbose:
-            print('initializing at %s solution, T = %i K, logg = %.1f dex' % (tstr, soln[0], soln[1]))
+        mle = soln
+        stds = np.zeros(len(mle))
+        redchi = chi / np.sum(self.mask)
+
+        if mcmc:
+            if  verbose:
+                print('initializing at %s solution, T = %i K, logg = %.1f dex' % (tstr, soln[0], soln[1]))
+
+            ndim = len(soln)
+            
+            sampler = emcee.EnsembleSampler(nwalkers,ndim,lnprob, threads = threads)
+
+            pos0 = np.zeros((nwalkers,ndim))
 
 
-        ndim = len(soln)
-        
-        sampler = emcee.EnsembleSampler(nwalkers,ndim,lnprob, threads = threads)
-
-        pos0 = np.zeros((nwalkers,ndim))
-
-
-        for jj in range(ndim):
-                pos0[:,jj] = (soln[jj] + 1e-2*soln[jj]*np.random.normal(size = nwalkers))
-
-        if verbose:
-            print('burning in chains...')
-
-        b = sampler.run_mcmc(pos0, burn, progress = progress)
-
-        sampler.reset()
-
-        if verbose:
-            print('sampling posterior...')
-        b = sampler.run_mcmc(b.coords, ndraws, progress = progress)
-
-        if plot_trace:
-            f, axs = plt.subplots(ndim, 1, figsize = (10, 6))
             for jj in range(ndim):
-                axs[jj].plot(sampler.chain[:,:,jj].T, alpha = 0.3, color = 'k');
-                plt.ylabel(param_names[jj])
-            plt.xlabel('steps')
-            plt.show()
+                    pos0[:,jj] = (soln[jj] + 1e-2*soln[jj]*np.random.normal(size = nwalkers))
 
-        lnprobs = sampler.get_log_prob(flat = True)
-        medians = np.median(sampler.flatchain, 0)
-        mle = sampler.flatchain[np.argmax(lnprobs)]
-        redchi = -2 * np.max(lnprobs) / (len(wl) - 3)
-        stds = np.std(sampler.flatchain, 0)
-        
-        if mle[0] < 7000 or mle[0] > 38000:
-            print('temperature is near bound of the model grid! exercise caution with this result')
-        if mle[1] < 6.7 or mle[1] > 9.3:
-            print('logg is near bound of the model grid! exercise caution with this result')
+            if verbose:
+                print('burning in chains...')
 
-        if isbinary:
-            fit_fl = self.binary_sampler(wl, *mle)
-        elif not isbinary:
-            fit_fl = self.spectrum_sampler(wl, *mle)
+            b = sampler.run_mcmc(pos0, burn, progress = progress)
 
-        if plot_corner:
+            sampler.reset()
 
-            plt.rcParams.update({'font.size': 12})
+            if verbose:
+                print('sampling posterior...')
+            b = sampler.run_mcmc(b.coords, ndraws, progress = progress)
 
-            f = corner.corner(sampler.flatchain[:, :nstarparams], labels = param_names[:nstarparams], \
-                     label_kwargs = dict(fontsize =  12), quantiles = (0.16, 0.5, 0.84),
-                     show_titles = True, title_kwargs = dict(fontsize = 12))
-            #plt.tight_layout()
-            if savename is not None:
-                plt.savefig(savename + '_corner.pdf', bbox_inches = 'tight')
-            plt.show()
+            if plot_trace:
+                f, axs = plt.subplots(ndim, 1, figsize = (10, 6))
+                for jj in range(ndim):
+                    axs[jj].plot(sampler.chain[:,:,jj].T, alpha = 0.3, color = 'k');
+                    plt.ylabel(param_names[jj])
+                plt.xlabel('steps')
+                plt.show()
 
-        if plot_corner_full:
+            lnprobs = sampler.get_log_prob(flat = True)
+            medians = np.median(sampler.flatchain, 0)
+            mle = sampler.flatchain[np.argmax(lnprobs)]
+            redchi = -2 * np.max(lnprobs) / (len(wl) - 3)
+            stds = np.std(sampler.flatchain, 0)
+            
+            if mle[0] < 7000 or mle[0] > 38000:
+                print('temperature is near bound of the model grid! exercise caution with this result')
+            if mle[1] < 6.7 or mle[1] > 9.3:
+                print('logg is near bound of the model grid! exercise caution with this result')
 
-            f = corner.corner(sampler.flatchain, labels = param_names, \
-                     label_kwargs = dict(fontsize =  12), quantiles = (0.16, 0.5, 0.84),
-                     show_titles = False)
+            if plot_corner:
+
+                plt.rcParams.update({'font.size': 12})
+
+                f = corner.corner(sampler.flatchain[:, :nstarparams], labels = param_names[:nstarparams], \
+                         label_kwargs = dict(fontsize =  12), quantiles = (0.16, 0.5, 0.84),
+                         show_titles = True, title_kwargs = dict(fontsize = 12))
+                #plt.tight_layout()
+                if savename is not None:
+                    plt.savefig(savename + '_corner.pdf', bbox_inches = 'tight')
+                plt.show()
+
+            if plot_corner_full:
+
+                f = corner.corner(sampler.flatchain, labels = param_names, \
+                         label_kwargs = dict(fontsize =  12), quantiles = (0.16, 0.5, 0.84),
+                         show_titles = False)
+
+
+        fit_fl = self.spectrum_sampler(wl, *mle)
 
         if make_plot:
             #fig,ax = plt.subplots(ndim, ndim, figsize = (15,15))
@@ -625,7 +660,7 @@ class GFP:
                     breakpoints.append(bisect_left(wl, self.edges[kk+1]))
                     breakpoints.append(bisect_left(wl, self.edges[kk]))
                 breakpoints = np.flip(breakpoints)
-                print(breakpoints)
+                # print(breakpoints)
                 for kk in range(len(breakpoints)):
                     if (kk + 1)%2 == 0:
                         continue
@@ -653,12 +688,12 @@ class GFP:
 
             plt.figure(figsize = (10,5))
             plt.plot(wl, fl, 'k')
-            randidx = np.random.choice(len(sampler.flatchain), size = 10)
+            # randidx = np.random.choice(len(sampler.flatchain), size = 10)
             plt.plot(wl, fit_fl, 'r')
 
-            for idx in randidx:
-                label = sampler.flatchain[idx]
-                plt.plot(wl, self.spectrum_sampler(wl, *label), 'r', alpha = 0.25, lw = 0.5)
+            # for idx in randidx:
+            #     label = sampler.flatchain[idx]
+            #     plt.plot(wl, self.spectrum_sampler(wl, *label), 'r', alpha = 0.25, lw = 0.5)
             
             plt.ylabel('Normalized Flux')
             plt.xlabel('Wavelength ($\mathrm{\AA}$)')
@@ -676,7 +711,11 @@ class GFP:
         self.cont_fixed = False
         self.rv = 0 # RESET THESE PARAMETERS
 
-        return mle, stds, redchi
+
+        if mcmc:
+            return mle, stds, redchi, star_rv
+        else:
+            return soln, warm_chi / np.sum(self.mask), star_rv
 
     def blackbody(self, wl, teff):
         wl = wl * 1e-10
