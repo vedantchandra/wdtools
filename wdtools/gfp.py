@@ -346,15 +346,20 @@ class GFP:
 
         self.mask = ~self.contmask
 
-        model = self.spectrum_sampler(wl, *soln.x)[self.contmask]
-        spline_pars = scipy.interpolate.splrep(wl[self.contmask], model / np.median(model),
+        model = self.spectrum_sampler(wl, *soln.x)
+        spline_pars = scipy.interpolate.splrep(wl[self.contmask], model[self.contmask] / np.median(model[self.contmask]),
                                                 k = 3, s = self.smooth)
 
-        smooth_cont = scipy.interpolate.splev(wl, spline_pars) * np.median(model)
+        smooth_cont = scipy.interpolate.splev(wl, spline_pars) * np.median(model[self.contmask])
 
         if plot:
-            plt.plot(wl, fl)
-            plt.plot(wl, smooth_cont)
+            plt.figure(figsize = (8, 6))
+            plt.plot(wl, fl, 'k', label = 'Data')
+            plt.plot(wl, model, 'r', label = 'Star + Continuum')
+            plt.plot(wl[self.contmask], smooth_cont[self.contmask], 'go', label = 'Continuum')
+            plt.xlabel('Wavelength')
+            plt.ylabel('Flux')
+            plt.legend()
             plt.show()
 
         fl = fl / smooth_cont
@@ -364,9 +369,6 @@ class GFP:
             fl = fl[(breakpoints[-1] - 5):(breakpoints[0] + 5)]
             self.contmask = self.contmask[(breakpoints[-1] - 5):(breakpoints[0] + 5)]
             self.mask = ~self.contmask
-        if plot:
-            plt.plot(wl, fl)
-            plt.show()
 
         ret = [wl, fl]
 
@@ -518,7 +520,7 @@ class GFP:
             print('fitting continuum...')
 
         if DA:
-            wl, fl, ivar, init_soln = self.normalize_DA(wl, fl, ivar, return_soln = True, **norm_kw)
+            wl, fl, ivar, init_soln = self.normalize_DA(wl, fl, ivar, return_soln = True, plot = plot_init, **norm_kw)
 
         if verbose:
             print('initial guess: T = %i, logg = %.2f' % (init_soln[0], init_soln[1]))
@@ -621,6 +623,8 @@ class GFP:
             mle = sampler.flatchain[np.argmax(lnprobs)]
             redchi = -2 * np.max(lnprobs) / (len(wl) - 3)
             stds = np.std(sampler.flatchain, 0)
+            self.flatchain = sampler.flatchain
+
             
             if mle[0] < 7000 or mle[0] > 38000:
                 print('temperature is near bound of the model grid! exercise caution with this result')
@@ -647,6 +651,7 @@ class GFP:
 
 
         fit_fl = self.spectrum_sampler(wl, *mle)
+
 
         if make_plot:
             #fig,ax = plt.subplots(ndim, ndim, figsize = (15,15))
@@ -711,11 +716,13 @@ class GFP:
         self.cont_fixed = False
         self.rv = 0 # RESET THESE PARAMETERS
 
+        mle = mle[0:2]
+        stds = stds[0:2]
 
-        if mcmc:
-            return mle, stds, redchi, star_rv
-        else:
-            return soln, warm_chi / np.sum(self.mask), star_rv
+        mle = np.append(mle, star_rv)
+        stds = np.append(stds, 0) # REPLACE WITH E_RV 
+
+        return mle, stds, redchi
 
     def blackbody(self, wl, teff):
         wl = wl * 1e-10
@@ -731,5 +738,5 @@ if __name__ == '__main__':
     
     plt.plot(wl, fl)
     
-    result = gfp.fit_spectrum(wl, fl, init = 'de', burn = 1, ndraws = 1, 
-                              normalize_DA = True)
+    result = gfp.fit_spectrum(wl, fl,  burn = 1, ndraws = 1, 
+                              )
