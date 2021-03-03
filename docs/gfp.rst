@@ -14,11 +14,13 @@ Say we have an un-normalized DA spectrum from the Sloan Digital Sky Survey (SDSS
 
    import wdtools
 
-   sp = wdtools.SpecTools()
    gfp = wdtools.GFP(resolution = 3, specclass = 'DA')
 
-   wl_norm, flux_norm, ivar_norm = sp.normalize_balmer(wl, flux, ivar = ivar)
-   labels, e_labels, redchi = gfp.fit_spectrum(wl_norm, flux_norm, ivar_norm, init = 'de', make_plot = True)
+   labels, e_labels, redchi = gfp.fit_spectrum(wl, flux, ivar,
+                                mcmc = True, nwalkers = 50, burn = 100, ndraws = 100,
+                                plot_init = True,
+                                make_plot = True, plot_corner = True, 
+                                savename = 'example')
 
 ``label`` and ``e_labels`` respectively are 3-arrays of the fitted effective temperature, log surface gravity, and radial velocity along with respective uncertainties. ``redchi`` is the reduced chi-square statistic, which can be used as a rough estimate of the goodness-of-fit. More details are in our paper, and a more complete example can be found in the tutorial. 
 
