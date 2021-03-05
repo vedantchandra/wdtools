@@ -539,9 +539,9 @@ class GFP:
             print('fitting radial velocity...')
 
         template = self.spectrum_sampler(wl, *init_soln[0:2])
-        self.rv = self.sp.get_rv(wl, fl, wl, template)
+        self.rv, e_rv = self.sp.get_rv(wl, fl, ivar, wl, template)
         star_rv = self.rv
-        print('Radial Velocity = %i km/s' % self.rv)
+        print('Radial Velocity = %i ± %i km/s' % (self.rv, e_rv))
 
         ## CORRECT RV
 
@@ -720,7 +720,7 @@ class GFP:
         stds = stds[0:2]
 
         mle = np.append(mle, star_rv)
-        stds = np.append(stds, 0) # REPLACE WITH E_RV 
+        stds = np.append(stds, e_rv) # REPLACE WITH E_RV 
 
         return mle, stds, redchi
 

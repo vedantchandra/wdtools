@@ -466,8 +466,15 @@ class SpecTools():
         # plt.show()
         return max_rv
 
-    def get_rv(self, wl, fl, temp_wl, temp_fl, r1 = 1000, p1 = 100, r2 = 100, p2 = 200): # IMPLEMENT UNCERTAINTIES AT SPECTRUM LEVEL
+    def get_one_rv(self, wl, fl, temp_wl, temp_fl, r1 = 1000, p1 = 100, r2 = 100, p2 = 200): # IMPLEMENT UNCERTAINTIES AT SPECTRUM LEVEL
         rv, cc = self.xcorr_rv(wl, fl, temp_wl, temp_fl, init_rv = 0, rv_range = r1, npoint = p1)
         rv_guess = self.quad_max(rv, cc)
         rv, cc = self.xcorr_rv(wl, fl, temp_wl, temp_fl, init_rv = rv_guess, rv_range = r2, npoint = p2)
         return self.quad_max(rv, cc)
+
+    def get_rv(self, wl, fl, ivar, temp_wl, temp_fl, N = 100, kwargs = {}):
+        rvs = [];
+        for ii in range(N):
+            fl_i = fl + np.sqrt(1/(ivar + 1e-10)) * np.random.normal(size = len(fl))
+            rvs.append(self.get_one_rv(wl, fl_i, temp_wl, temp_fl), **kwargs)
+        return np.mean(rvs), np.std(rvs)
