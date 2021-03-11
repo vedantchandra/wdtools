@@ -14,6 +14,7 @@ from scipy.interpolate import interp1d
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import correlate
 from astropy import constants as c
+from scipy.interpolate import splev,splrep
 
 path = os.path.abspath(__file__)
 dir_path = os.path.dirname(path)
@@ -466,15 +467,133 @@ class SpecTools():
         # plt.show()
         return max_rv
 
-    def get_one_rv(self, wl, fl, temp_wl, temp_fl, r1 = 1000, p1 = 100, r2 = 100, p2 = 200): # IMPLEMENT UNCERTAINTIES AT SPECTRUM LEVEL
+    def get_one_rv(self, wl, fl, temp_wl, temp_fl, r1 = 1000, p1 = 100, r2 = 100, p2 = 100, plot = False): # IMPLEMENT UNCERTAINTIES AT SPECTRUM LEVEL
         rv, cc = self.xcorr_rv(wl, fl, temp_wl, temp_fl, init_rv = 0, rv_range = r1, npoint = p1)
+
+        # if plot:
+        #     plt.plot(rv, cc, color = 'k', alpha = 0.1)
+
         rv_guess = self.quad_max(rv, cc)
         rv, cc = self.xcorr_rv(wl, fl, temp_wl, temp_fl, init_rv = rv_guess, rv_range = r2, npoint = p2)
+        if plot:
+            plt.plot(rv, cc, color = 'k', alpha = 0.1)
         return self.quad_max(rv, cc)
 
     def get_rv(self, wl, fl, ivar, temp_wl, temp_fl, N = 100, kwargs = {}):
+
+        nans = np.isnan(fl) + np.isnan(ivar) + np.isnan(temp_fl)
+
+        if np.sum(nans) > 0:
+            print("NaNs detected in RV routine... removing them...")
+            wl = wl[~nans]
+            fl = fl[~nans]
+            ivar = ivar[~nans]
+            temp_wl = temp_wl[~nans]
+            temp_fl = temp_fl[~nans]
+
         rvs = [];
         for ii in range(N):
             fl_i = fl + np.sqrt(1/(ivar + 1e-10)) * np.random.normal(size = len(fl))
-            rvs.append(self.get_one_rv(wl, fl_i, temp_wl, temp_fl), **kwargs)
+            rvs.append(self.get_one_rv(wl, fl_i, temp_wl, temp_fl, **kwargs))
         return np.mean(rvs), np.std(rvs)
+
+    def spline_norm(self, wl, fl, ivar, exclude_wl, sfac = 1, k = 3, plot = False, niter = 0):
+        
+        fl_norm = fl / np.nanmedian(fl)
+        nivar = ivar * np.nanmedian(fl)**2
+        x = (wl - np.min(wl)) / (np.max(wl) - np.min(wl))
+        
+        cont_mask = np.ones(len(wl))
+
+        for ii in range(len(exclude_wl) - 1):
+            if ii % 2 != 0:
+                continue
+            c1 = bisect_left(wl, exclude_wl[ii])
+            c2 = bisect_left(wl, exclude_wl[ii + 1])
+
+            cont_mask[c1:c2] = 0
+        cont_mask = cont_mask.astype(bool)
+        
+        s = (len(x) - np.sqrt(2 * len(x))) * sfac # SFAC to scale rule of thumb smoothing
+            
+        spline = splev(x, splrep(x[cont_mask], fl_norm[cont_mask], k = 3, s = s, w = np.sqrt(nivar[cont_mask])))
+        fl_prev = fl_norm
+        fl_norm = fl_norm / spline
+        nivar = nivar * spline**2
+        
+        for n in range(niter): # Repeat spline fit with reduced smoothing. don't use without testing
+            fl_prev = fl_norm
+            spline = splev(x, splrep(x[cont_mask], fl_norm[cont_mask], k = 3, s = s - 0.1 * n * s, 
+                                     w = np.sqrt(nivar[cont_mask])))
+            fl_norm = fl_norm / spline
+            nivar = nivar * spline**2
+
+        
+        if plot:
+            plt.figure(figsize = (12, 5))
+            plt.plot(wl, fl_prev, color = 'k')
+            plt.plot(wl, spline, color = 'r')
+            plt.show()
+            plt.figure(figsize = (12, 5))
+            plt.plot(wl, fl_norm, color = 'k')
+            plt.vlines(exclude_wl, ymin = fl_norm.min(), ymax = fl_norm.max(), color = 'k', 
+                       linestyle = '--', lw = 1, zorder = 10)
+            
+        return fl_norm, nivar
+
+
+    def get_line_rv(self, wl, fl, ivar, centroid, distance = 150, edge = 10, nmodel = 3, plot = False):
+
+        c1 = bisect_left(wl, centroid - distance)
+        c2 = bisect_left(wl, centroid + distance)
+        lower = centroid - distance + edge
+        upper = centroid + distance - edge
+
+        cwl, cfl, civar = wl[c1:c2], fl[c1:c2], ivar[c1:c2]
+
+        edgemask = (cwl < lower) + (cwl > upper)
+
+        line = np.polyval(np.polyfit(cwl[edgemask], cfl[edgemask], 1), cwl)
+
+        nfl = 1 - cfl / line
+        nivar = civar * line**2
+
+        for ii in range(nmodel):
+            if ii == 0:
+                model = VoigtModel(prefix = 'g' + str(ii) + '_')
+            else:
+                model += VoigtModel(prefix = 'g' + str(ii) + '_')
+
+        params = model.make_params()
+
+        for ii in range(nmodel):
+            params['g' + str(ii) + '_center'].set(value = centroid, vary = False, expr = 'g0_center')
+            params['g' + str(ii) + '_sigma'].set(value = 25, vary = True)
+            params['g' + str(ii) + '_amplitude'].set(value = 35/nmodel, vary = True)
+
+        params['g0_center'].set(value = centroid, vary = True, expr = None)
+        
+        if plot:
+            plt.plot(cwl, 1-nfl)
+            #plt.plot(cwl, model.eval(params, x = cwl))
+
+        res = model.fit(nfl, params, x = cwl, method = 'nelder')
+
+        res.params['g0_center'].set(value = centroid)
+        template = model.eval(res.params, x = cwl)
+
+        rv, e_rv = self.get_rv(cwl, nfl, nivar, cwl, template, kwargs = dict(plot = False))
+
+        if plot:
+            fit_center = centroid + rv * 1e3 * centroid / c.c.value
+            res.params['g0_center'].set(value = fit_center)
+            print(fit_center)
+            plt.plot(cwl, 1-model.eval(res.params, x = cwl), 'r')
+            plt.xlabel('Wavelength')
+            plt.ylabel('Normalized Flux')
+            plt.title('RV = %.1f ± %.1f km/s' % (rv, e_rv))
+            plt.axvline(centroid, color = 'k', linestyle = '--')
+            plt.axvline(fit_center, color = 'r', linestyle = '--')
+
+        
+        return rv, e_rv

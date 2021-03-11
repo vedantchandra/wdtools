@@ -11,7 +11,6 @@ import sys
 from tqdm import tqdm
 from scipy import interpolate
 import os
-from PyAstronomy import pyasl
 import emcee
 import corner
 from scipy import optimize as opt
@@ -26,6 +25,7 @@ from tensorflow.keras.optimizers import *
 
 from numpy.polynomial.polynomial import polyfit, polyval
 from numpy.polynomial.chebyshev import chebfit, chebval
+from scipy.interpolate import splev, splrep
 
 
 path = os.path.abspath(__file__)
@@ -87,13 +87,16 @@ class GFP:
         self.resolution['DA'] = resolution * pix_per_a
         self.model['DA'] = self.model_DA
         self.lamgrid['DA'] = self.lamgrid_DA
+        self.exclude_wl = [3790, 3810, 3819, 3855,3863, 3920, 3930 , 4020 , 4040, 4180, 4215,
+                       4490, 4662.68, 5062.68, 6314.61, 6814.61];
 
         self.cont_fixed = False
+        self.rv_fixed = False
+        self.rv = 0
+
 
         self.centroid_dict = dict(alpha = 6564.61, beta = 4862.68, gamma = 4341.68, delta = 4102.89, eps = 3971.20, h8 = 3890.12)
-        self.distance_dict = dict(alpha = 250, beta = 200, gamma = 85, delta = 70, eps = 45, h8 = 35)
-
-        self.rv = 0
+        self.distance_dict = dict(alpha = 250, beta = 250, gamma = 85, delta = 70, eps = 45, h8 = 30)
 
         if specclass == 'DB':
             raise Exception('DB models unfortunately under restricted access right now and unavailable in this package.')
@@ -236,7 +239,7 @@ class GFP:
                 Synthetic spectrum with desired parameters, interpolated onto the supplied wavelength grid and convolved with the instrument resolution. 
         """
 
-        if self.cont_fixed:
+        if self.rv_fixed:
             rv = self.rv
         else:
             rv = 0
@@ -252,145 +255,172 @@ class GFP:
 
         if self.cont_fixed:
 
-            spline_pars = scipy.interpolate.splrep(wl[self.contmask], synth[self.contmask] / np.median(synth[self.contmask]),
-                                                k = 3, s = self.smooth)
-            mod_smooth_cont = scipy.interpolate.splev(wl, spline_pars) * np.median(synth[self.contmask])
-            synth = synth / mod_smooth_cont
+            # spline_pars = scipy.interpolate.splrep(wl[self.contmask], synth[self.contmask] / np.median(synth[self.contmask]),
+            #                                     k = 3, s = self.smooth)
+            # mod_smooth_cont = scipy.interpolate.splev(wl, spline_pars) * np.median(synth[self.contmask])
+            # synth = synth / mod_smooth_cont
+
+            dummy_ivar = 1 / np.repeat(0.001, len(wl))**2
+            nanwhere = np.isnan(synth)
+            dummy_ivar[nanwhere] = 0
+            synth[nanwhere] = 0
+            synth,_ = self.spline_norm_DA(wl, synth, dummy_ivar)
+            synth[nanwhere] = np.nan
 
         if len(polyargs) > 0:
-            synth = synth * chebval(2*(wl - wl.min() / (wl.max())) - 1.0, polyargs)
+            synth = synth + chebval(2*(wl - wl.min() / (wl.max())) - 1.0, polyargs)
 
         return synth
 
-    def normalize_DA(self, wl, fl, ivar = None, cont_polyorder = 3, plot = False,
-                            lines = ['alpha', 'beta', 'gamma', 'delta', 'eps', 'h8'],
-                            maxfev = 500, smooth = 0, crop = True, return_soln = False):
+    # def normalize_DA(self, wl, fl, ivar = None, cont_polyorder = 3, plot = False,  +++++++++ DO NOT USE, VERY SLOW +++++++
+    #                         lines = ['alpha', 'beta', 'gamma', 'delta', 'eps', 'h8'],
+    #                         maxfev = 500, smooth = 0, crop = True, return_soln = False):
 
-        '''
-        Continuum-normalization of a DA white dwarf spectrum by fitting a combination of the 
-        model spectra and Chebyshev polynomials. 
+    #     '''
+    #     Continuum-normalization of a DA white dwarf spectrum by fitting a combination of the 
+    #     model spectra and Chebyshev polynomials. 
         
-        Parameters
-        ---------
-        wl : array
-            Wavelength array of spectrum
-        fl : array
-            Flux array of spectrum
-        ivar : array, optional
-            Inverse variance array. If `None`, will return only the normalized wavelength and flux. 
-        centroid : float
-            The theoretical centroid of the absorption line that is being fitted, in wavelength units.
-        distance : float
-            Distance in Angstroms away from the line centroid to include in the fit. Should include 
-            the entire absorption line wings with minimal continum. 
-        make_plot : bool, optional
-            Whether to plot the linear + Voigt fit. Use for debugging. 
+    #     Parameters
+    #     ---------
+    #     wl : array
+    #         Wavelength array of spectrum
+    #     fl : array
+    #         Flux array of spectrum
+    #     ivar : array, optional
+    #         Inverse variance array. If `None`, will return only the normalized wavelength and flux. 
+    #     centroid : float
+    #         The theoretical centroid of the absorption line that is being fitted, in wavelength units.
+    #     distance : float
+    #         Distance in Angstroms away from the line centroid to include in the fit. Should include 
+    #         the entire absorption line wings with minimal continum. 
+    #     make_plot : bool, optional
+    #         Whether to plot the linear + Voigt fit. Use for debugging. 
 
-        Returns
-        -------
-            tuple
-                Tuple of cropped wavelength, cropped and normalized flux, and (if ivar is not None) 
-                cropped and normalized inverse variance array. 
+    #     Returns
+    #     -------
+    #         tuple
+    #             Tuple of cropped wavelength, cropped and normalized flux, and (if ivar is not None) 
+    #             cropped and normalized inverse variance array. 
 
-        '''
+    #     '''
 
-        self.smooth = smooth # Spline smoothing factor
+    #     self.smooth = smooth # Spline smoothing factor
 
-        ## RESTRICT TO NN DOMAIN ##########
+    #     ## RESTRICT TO NN DOMAIN ##########
 
-        wlbounds = self.lamgrid['DA'].min() + 5, self.lamgrid['DA'].max() - 5
-        in1,in2 = bisect_left(wl, wlbounds[0]), bisect_left(wl, wlbounds[1])
+    #     wlbounds = self.lamgrid['DA'].min() + 5, self.lamgrid['DA'].max() - 5
+    #     in1,in2 = bisect_left(wl, wlbounds[0]), bisect_left(wl, wlbounds[1])
 
-        wl = wl[in1:in2]
-        fl = fl[in1:in2]
-        if ivar is not None: ivar = ivar[in1:in2]
+    #     wl = wl[in1:in2]
+    #     fl = fl[in1:in2]
+    #     if ivar is not None: ivar = ivar[in1:in2]
 
-        ##################################
+    #     ##################################
 
-        edges = [];
-        breakpoints = [];
+    #     edges = [];
+    #     breakpoints = [];
 
-        mask = np.zeros(len(wl))
-        for line in lines:
-            c1 = self.centroid_dict[line] - self.distance_dict[line]
-            c2 = self.centroid_dict[line] + self.distance_dict[line]
-            mask += (wl > c1)*\
-                    (wl < c2)
-            edges.extend([c1, c2])
-            breakpoints.extend([bisect_left(wl, c2), bisect_left(wl, c1)])
+    #     mask = np.zeros(len(wl))
+    #     for line in lines:
+    #         c1 = self.centroid_dict[line] - self.distance_dict[line]
+    #         c2 = self.centroid_dict[line] + self.distance_dict[line]
+    #         mask += (wl > c1)*\
+    #                 (wl < c2)
+    #         edges.extend([c1, c2])
+    #         breakpoints.extend([bisect_left(wl, c2), bisect_left(wl, c1)])
 
-        self.breakpoints = breakpoints
-        self.contmask = ~(mask > 0) # Select continuum pixels
-        self.edges = edges
+    #     self.breakpoints = breakpoints
+    #     self.contmask = ~(mask > 0) # Select continuum pixels
+    #     self.edges = edges
         
-        init_prms = [12000, 8]
-        bounds = [(6500, 39000), (6.5, 9.5)]
-        init_prms.extend(chebfit(2*(wl - wl.min() / (wl.max())) - 1.0, fl, cont_polyorder))
-        bounds.extend([(-np.Inf, np.Inf) for jj in range(cont_polyorder + 1)])
+    #     init_prms = [12000, 8]
+    #     bounds = [(6500, 39000), (6.5, 9.5)]
+    #     init_prms.extend(chebfit(2*(wl - wl.min() / (wl.max())) - 1.0, fl, cont_polyorder))
+    #     bounds.extend([(-np.Inf, np.Inf) for jj in range(cont_polyorder + 1)])
 
-        self.mask = np.ones(len(wl)) > 0 ## FIT FULL SPECTRUM FOR CONTINUUM
+    #     self.mask = np.ones(len(wl)) > 0 ## FIT FULL SPECTRUM FOR CONTINUUM
 
-        def residual(params):
-            if params[0] < 6500 or params[0] > 39000 or params[1] < 6.5 or params[1] > 9.5:
-                resid = 1e10
-            else:
-                resid = (fl - self.spectrum_sampler(wl, *params))[self.contmask]
-            if ivar is None: 
-                chi2 = np.sum(resid**2)
-            else: 
-                chi2 = np.sum(resid**2 * ivar[self.contmask])
-            return chi2
+    #     def residual(params):
 
-        soln = scipy.optimize.minimize(residual, init_prms, method = 'Nelder-Mead', options = dict(maxfev = maxfev),
-                            )
+    #         params = np.array(params)
 
-        self.mask = ~self.contmask
+    #         if params[0] < 6500 or params[0] > 39000 or params[1] < 6.5 or params[1] > 9.5:
+    #             resid = 1e10
+    #         else:
+    #             resid = (fl - self.spectrum_sampler(wl, *params))[self.contmask]
+    #         if ivar is None: 
+    #             chi2 = (resid**2)
+    #         else: 
+    #             chi2 = (resid**2 * ivar[self.contmask])
 
-        model = self.spectrum_sampler(wl, *soln.x)
-        spline_pars = scipy.interpolate.splrep(wl[self.contmask], model[self.contmask] / np.median(model[self.contmask]),
-                                                k = 3, s = self.smooth)
+    #         print(chi2.sum() / (len(chi2) - len(params)))
+    #         return chi2
 
-        smooth_cont = scipy.interpolate.splev(wl, spline_pars) * np.median(model[self.contmask])
+    #     # soln = scipy.optimize.minimize(residual, init_prms, method = 'lm', options = dict(maxfev = maxfev),
+    #     #                     )
 
-        if plot:
-            plt.figure(figsize = (8, 6))
-            plt.plot(wl, fl, 'k', label = 'Data')
-            plt.plot(wl, model, 'r', label = 'Star + Continuum')
-            plt.plot(wl[self.contmask], smooth_cont[self.contmask], 'go', label = 'Continuum')
-            plt.xlabel('Wavelength')
-            plt.ylabel('Flux')
-            plt.legend()
-            plt.show()
+    #     params = lmfit.Parameters()
+    #     params.add('teff', value = 12000, min = 6500, max = 40000)
+    #     params.add('logg', value = 8, min = 6.5, max = 9.5)
+    #     for ii in range(cont_polyorder + 1):
+    #         params.add('c_' + str(ii), value = init_prms[ii + 2])
 
-        fl = fl / smooth_cont
-
-        if crop:
-            wl = wl[(breakpoints[-1] - 5):(breakpoints[0] + 5)]
-            fl = fl[(breakpoints[-1] - 5):(breakpoints[0] + 5)]
-            self.contmask = self.contmask[(breakpoints[-1] - 5):(breakpoints[0] + 5)]
-            self.mask = ~self.contmask
-
-        ret = [wl, fl]
-
-        if ivar is not None:
-            ivar = ivar * smooth_cont**2
-            if crop: ivar = ivar[(breakpoints[-1] - 5):(breakpoints[0] + 5)]
-            ret.append(ivar)
+    #     print(params)
         
-        if return_soln:
+    #     res = lmfit.minimize(residual, params, method = 'leastsq', xtol = 1e-15, ftol = 1e-15)
+    #     soln = np.array(res.params)
 
-            if soln.x[0] < 6500 or soln.x[0] > 39000 or soln.x[1] < 6.5 or soln.x[1] > 9.5:
-                print('continuum stellar solution out of bounds of NN, do not trust') 
-            ret.append(soln.x)
+    #     self.mask = ~self.contmask
 
-        return ret
+    #     model = self.spectrum_sampler(wl, *soln)
+    #     spline_pars = scipy.interpolate.splrep(wl[self.contmask], model[self.contmask] / np.median(model[self.contmask]),
+    #                                             k = 3, s = self.smooth)
 
+    #     smooth_cont = scipy.interpolate.splev(wl, spline_pars) * np.median(model[self.contmask])
+
+    #     if plot:
+    #         plt.figure(figsize = (8, 6))
+    #         plt.plot(wl, fl, 'k', label = 'Data')
+    #         plt.plot(wl, model, 'r', label = 'Star + Continuum')
+    #         plt.plot(wl[self.contmask], smooth_cont[self.contmask], 'go', label = 'Continuum')
+    #         plt.xlabel('Wavelength')
+    #         plt.ylabel('Flux')
+    #         plt.legend()
+    #         plt.show()
+
+    #     fl = fl / smooth_cont
+
+    #     if crop:
+    #         wl = wl[(breakpoints[-1] - 5):(breakpoints[0] + 5)]
+    #         fl = fl[(breakpoints[-1] - 5):(breakpoints[0] + 5)]
+    #         self.contmask = self.contmask[(breakpoints[-1] - 5):(breakpoints[0] + 5)]
+    #         self.mask = ~self.contmask
+
+    #     ret = [wl, fl]
+
+    #     if ivar is not None:
+    #         ivar = ivar * smooth_cont**2
+    #         if crop: ivar = ivar[(breakpoints[-1] - 5):(breakpoints[0] + 5)]
+    #         ret.append(ivar)
+        
+    #     if return_soln:
+
+    #         if soln[0] < 6500 or soln[0] > 39000 or soln[1] < 6.5 or soln[1] > 9.5:
+    #             print('continuum stellar solution out of bounds of NN, do not trust') 
+    #         ret.append(soln)
+
+    #     return ret
+
+    def spline_norm_DA(self, wl, fl, ivar, kwargs = {}):
+        fl_norm, ivar_norm = self.sp.spline_norm(wl, fl, ivar, self.exclude_wl, **kwargs)
+        return fl_norm, ivar_norm
 
     def fit_spectrum(self, wl, fl, ivar = None, nwalkers = 50, burn = 50, ndraws = 25, make_plot = True, threads = 1, \
                     plot_trace = False, prior_teff = None, savename = None, isbinary = None, mask_threshold = 100,
                     DA = True, progress = True,
                     polyorder = 2, plot_init = False, plot_corner = False, plot_corner_full = False, verbose = True,
-                    norm_kw = {}, mcmc = False):
+                    norm_kw = {}, mcmc = False,
+                    lines = ['alpha', 'beta', 'gamma', 'delta', 'eps', 'h8'], maxfev = 1000):
 
         """
         Main fitting routine, takes a continuum-normalized spectrum and fits it with MCMC to recover steller labels. 
@@ -443,15 +473,27 @@ class GFP:
         """
 
         self.cont_fixed = False
+        self.rv_fixed = False
+
+        nans = np.isnan(fl)
+
+        if np.sum(nans) > 0:
+
+            print('NaN detected in input... removing them...')
+
+            wl = wl[~nans]
+            fl = fl[~nans]
+            ivar = ivar[~nans]
 
         if isbinary is None:
             isbinary == self.isbinary
 
         if ivar is None: # REPLACE THIS WITH YOUR OWN FUNCTION, REMOVE PYASL DEPENDENCE
-            print('no inverse variance array provided, inferring ivar using the beta-sigma method. the chi-square likelihood will not be exact; treat returned uncertainties with caution!')
-            beq = pyasl.BSEqSamp()
-            std, _ = beq.betaSigma(fl, 1, 1)
-            ivar = np.repeat(1 / std**2, len(fl))
+            print('Please provide an IVAR array')
+            # print('no inverse variance array provided, inferring ivar using the beta-sigma method. the chi-square likelihood will not be exact; treat returned uncertainties with caution!')
+            # beq = pyasl.BSEqSamp()
+            # std, _ = beq.betaSigma(fl, 1, 1)
+            # ivar = np.repeat(1 / std**2, len(fl))
 
         prior_lows = [6500, 6.5]
 
@@ -472,6 +514,7 @@ class GFP:
             if np.isnan(chisq):
                 return -np.Inf
             lnlike = -0.5 * chisq
+            #print(chisq / (np.sum(self.mask) - len(prms)))
             return lnlike
 
         def lnprior(prms):
@@ -520,11 +563,30 @@ class GFP:
             print('fitting continuum...')
 
         if DA:
-            wl, fl, ivar, init_soln = self.normalize_DA(wl, fl, ivar, return_soln = True, plot = plot_init, **norm_kw)
+            #wl, fl, ivar, init_soln = self.normalize_DA(wl, fl, ivar, return_soln = True, plot = plot_init, **norm_kw)
+            fl, ivar = self.spline_norm_DA(wl, fl, ivar, kwargs = dict(plot = plot_init))
 
-        if verbose:
-            print('initial guess: T = %i, logg = %.2f' % (init_soln[0], init_soln[1]))
+        #if verbose:
+            #print('initial guess: T = %i, logg = %.2f' % (init_soln[0], init_soln[1]))
         self.cont_fixed = True
+
+        edges = [];
+        mask = np.zeros(len(wl))
+
+        for line in lines:
+            wl1 = self.centroid_dict[line] - self.distance_dict[line]
+            wl2 = self.centroid_dict[line] + self.distance_dict[line]
+            c1 = bisect_left(wl, wl1)
+            c2 = bisect_left(wl, wl2)
+
+            edges.extend([wl2, wl1])
+
+            mask[c1:c2] = 1
+
+        self.mask = mask.astype(bool)
+        edges = np.flip(edges)
+        self.edges = edges
+        #print(edges)
 
         # plt.plot(wl, fl)
         # plt.plot(wl, self.spectrum_sampler(wl, *[17000, 7.9, 10]))
@@ -535,17 +597,9 @@ class GFP:
         # plt.plot(wl, 1 / np.sqrt(ivar))
         # plt.show()
 
-        if verbose:
-            print('fitting radial velocity...')
-
-        template = self.spectrum_sampler(wl, *init_soln[0:2])
-        self.rv, e_rv = self.sp.get_rv(wl, fl, ivar, wl, template)
-        star_rv = self.rv
-        print('Radial Velocity = %i ± %i km/s' % (self.rv, e_rv))
-
         ## CORRECT RV
 
-        #### CHANGE BELOW TO CURVE FIT TO GET COV MATRIX AND PLUG INTO EMCEE
+        ## ++++ TO DO +++++ IMPLEMENT LMFIT HERE, WITH GLOBAL OPTIMIZATION
 
 
         if verbose:
@@ -555,10 +609,10 @@ class GFP:
             init_prms.extend(np.zeros(polyorder))
             init_prms[nstarparams] = 1
         nll = lambda *args: -lnprob(*args)
-        cool_soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = 1000))
-        cool_chi = -2 * lnprob(cool_soln.x)
+        cool_soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = maxfev))
+        cool_chi = -2 * lnprob(cool_soln.x) / (np.sum(self.mask) - 2)
         if verbose:
-            print('cool solution: T = %i K, logg = %.1f dex, chi2 = %.1f' % (cool_soln.x[0], cool_soln.x[1], cool_chi))
+            print('cool solution: T = %i K, logg = %.1f dex, redchi = %.2f' % (cool_soln.x[0], cool_soln.x[1], cool_chi))
 
         if verbose:
             print('fitting warm solution...')
@@ -566,11 +620,11 @@ class GFP:
         if polyorder > 0:
             init_prms.extend(np.zeros(polyorder))
             init_prms[nstarparams] = 1
-        nll = lambda *args: -lnprob(*args)
-        warm_soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = 1000))
-        warm_chi = -2 * lnprob(warm_soln.x)
+        nll = lambda *args: -lnprob(*args) 
+        warm_soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = maxfev))
+        warm_chi = -2 * lnprob(warm_soln.x) / (np.sum(self.mask) - 2)
         if verbose:
-            print('warm solution: T = %i K, logg = %.1f dex, chi2 = %.1f' % (warm_soln.x[0], warm_soln.x[1], warm_chi))
+            print('warm solution: T = %i K, logg = %.1f dex, redchi = %.2f' % (warm_soln.x[0], warm_soln.x[1], warm_chi))
 
         if cool_chi < warm_chi:
             soln = cool_soln.x
@@ -581,9 +635,24 @@ class GFP:
             chi = warm_chi
             tstr = 'warm'
 
-        mle = soln
+
+        if verbose:
+            print('fitting radial velocity...')
+        template = self.spectrum_sampler(wl, *soln[0:2]) ## FIX THIS!! ----------------------------------------
+        self.rv, e_rv = self.sp.get_rv(wl, fl, ivar, wl, template)
+        star_rv = self.rv
+        print('Radial Velocity = %i ± %i km/s' % (self.rv, e_rv))
+        self.rv_fixed = True
+
+        if verbose:
+            print('final optimization...')
+
+        nll = lambda *args: -lnprob(*args) 
+        soln = scipy.optimize.minimize(nll, soln, method = 'Nelder-Mead', options = dict(maxfev = maxfev))
+
+        mle = soln.x
         stds = np.zeros(len(mle))
-        redchi = chi / np.sum(self.mask)
+        redchi = chi
 
         if mcmc:
             if  verbose:
@@ -662,9 +731,8 @@ class GFP:
                 for kk in range(len(self.edges)):
                     if (kk + 1)%2 == 0:
                         continue
-                    breakpoints.append(bisect_left(wl, self.edges[kk+1]))
                     breakpoints.append(bisect_left(wl, self.edges[kk]))
-                breakpoints = np.flip(breakpoints)
+                    breakpoints.append(bisect_left(wl, self.edges[kk+1]))
                 # print(breakpoints)
                 for kk in range(len(breakpoints)):
                     if (kk + 1)%2 == 0:
@@ -711,6 +779,8 @@ class GFP:
 
             if savename is not None:
                 plt.savefig(savename + '_fit.pdf', bbox_inches = 'tight')
+
+            plt.xlim(self.edges.min() - 100, self.edges.max() + 100)
             plt.show()
 
         self.cont_fixed = False
@@ -720,7 +790,7 @@ class GFP:
         stds = stds[0:2]
 
         mle = np.append(mle, star_rv)
-        stds = np.append(stds, e_rv) # REPLACE WITH E_RV 
+        stds = np.append(stds, e_rv)
 
         return mle, stds, redchi
 
