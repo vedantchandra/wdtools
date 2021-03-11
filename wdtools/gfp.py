@@ -562,9 +562,11 @@ class GFP:
         if verbose: 
             print('fitting continuum...')
 
+        norm_kw['plot'] = plot_init
+
         if DA:
             #wl, fl, ivar, init_soln = self.normalize_DA(wl, fl, ivar, return_soln = True, plot = plot_init, **norm_kw)
-            fl, ivar = self.spline_norm_DA(wl, fl, ivar, kwargs = dict(plot = plot_init))
+            fl, ivar = self.spline_norm_DA(wl, fl, ivar, kwargs = norm_kw)
 
         #if verbose:
             #print('initial guess: T = %i, logg = %.2f' % (init_soln[0], init_soln[1]))
@@ -656,9 +658,9 @@ class GFP:
 
         if mcmc:
             if  verbose:
-                print('initializing at %s solution, T = %i K, logg = %.1f dex' % (tstr, soln[0], soln[1]))
+                print('initializing at %s solution, T = %i K, logg = %.1f dex' % (tstr, mle[0], mle[1]))
 
-            ndim = len(soln)
+            ndim = len(mle)
             
             sampler = emcee.EnsembleSampler(nwalkers,ndim,lnprob, threads = threads)
 
@@ -666,7 +668,7 @@ class GFP:
 
 
             for jj in range(ndim):
-                    pos0[:,jj] = (soln[jj] + 1e-2*soln[jj]*np.random.normal(size = nwalkers))
+                    pos0[:,jj] = (mle[jj] + 1e-2*mle[jj]*np.random.normal(size = nwalkers))
 
             if verbose:
                 print('burning in chains...')
@@ -781,6 +783,7 @@ class GFP:
                 plt.savefig(savename + '_fit.pdf', bbox_inches = 'tight')
 
             plt.xlim(self.edges.min() - 100, self.edges.max() + 100)
+            plt.ylim(0, 1.5)
             plt.show()
 
         self.cont_fixed = False

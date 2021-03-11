@@ -530,14 +530,18 @@ class SpecTools():
 
         
         if plot:
-            plt.figure(figsize = (12, 5))
+            plt.figure(figsize = (12, 10))
+            plt.subplot(211)
             plt.plot(wl, fl_prev, color = 'k')
             plt.plot(wl, spline, color = 'r')
-            plt.show()
-            plt.figure(figsize = (12, 5))
+            plt.title('Continuum Fit')
+            plt.subplot(212)
             plt.plot(wl, fl_norm, color = 'k')
             plt.vlines(exclude_wl, ymin = fl_norm.min(), ymax = fl_norm.max(), color = 'k', 
                        linestyle = '--', lw = 1, zorder = 10)
+            plt.title('Normalized Spectrum')
+            plt.ylim(0, 1.5)
+            plt.show()
             
         return fl_norm, nivar
 
@@ -587,7 +591,6 @@ class SpecTools():
         if plot:
             fit_center = centroid + rv * 1e3 * centroid / c.c.value
             res.params['g0_center'].set(value = fit_center)
-            print(fit_center)
             plt.plot(cwl, 1-model.eval(res.params, x = cwl), 'r')
             plt.xlabel('Wavelength')
             plt.ylabel('Normalized Flux')
