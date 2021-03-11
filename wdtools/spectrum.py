@@ -14,7 +14,7 @@ from scipy.interpolate import interp1d
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import correlate
 from astropy import constants as c
-from scipy.interpolate import splev,splrep
+from scipy.interpolate import splev,splrep,LSQUnivariateSpline
 
 path = os.path.abspath(__file__)
 dir_path = os.path.dirname(path)
@@ -449,7 +449,8 @@ class SpecTools():
         cc = np.zeros(npoint)
         for ii,rv in enumerate(rvgrid):
             shift_model = self.doppler_shift(temp_wl, temp_fl, rv)
-            corr = np.corrcoef(fl, shift_model)[1, 0]
+            #corr = np.corrcoef(fl, shift_model)[1, 0]
+            corr = -np.sum((fl - shift_model)**2) # MINIMIZE LSQ DIFF. MAYBE PROPAGATE IVAR HERE?
             cc[ii] = corr
         return rvgrid, cc
 
@@ -491,11 +492,13 @@ class SpecTools():
             temp_wl = temp_wl[~nans]
             temp_fl = temp_fl[~nans]
 
+        rv = self.get_one_rv(wl, fl, temp_wl, temp_fl, **kwargs)
+
         rvs = [];
         for ii in range(N):
             fl_i = fl + np.sqrt(1/(ivar + 1e-10)) * np.random.normal(size = len(fl))
             rvs.append(self.get_one_rv(wl, fl_i, temp_wl, temp_fl, **kwargs))
-        return np.mean(rvs), np.std(rvs)
+        return rv, (np.quantile(rvs, 0.84) - np.quantile(rvs, 0.16)) / 2
 
     def spline_norm(self, wl, fl, ivar, exclude_wl, sfac = 1, k = 3, plot = False, niter = 0):
         
@@ -516,14 +519,25 @@ class SpecTools():
         
         s = (len(x) - np.sqrt(2 * len(x))) * sfac # SFAC to scale rule of thumb smoothing
             
-        spline = splev(x, splrep(x[cont_mask], fl_norm[cont_mask], k = 3, s = s, w = np.sqrt(nivar[cont_mask])))
+        spline = splev(x, splrep(x[cont_mask], fl_norm[cont_mask], k = k, s = s, w = np.sqrt(nivar[cont_mask])))
+
+        # t = [];
+
+        # for ii,wl in enumerate(exclude_wl):
+        #     if ii % 2 == 0:
+        #         t.append(wl - 5)
+        #     else:
+        #         t.append(wl  5)
+
+        # spline = LSQUnivariateSpline(x[cont_mask], fl_norm[cont_mask], t = t, k = 3)(x)
+
         fl_prev = fl_norm
         fl_norm = fl_norm / spline
         nivar = nivar * spline**2
         
         for n in range(niter): # Repeat spline fit with reduced smoothing. don't use without testing
             fl_prev = fl_norm
-            spline = splev(x, splrep(x[cont_mask], fl_norm[cont_mask], k = 3, s = s - 0.1 * n * s, 
+            spline = splev(x, splrep(x[cont_mask], fl_norm[cont_mask], k = k, s = s - 0.1 * n * s, 
                                      w = np.sqrt(nivar[cont_mask])))
             fl_norm = fl_norm / spline
             nivar = nivar * spline**2
@@ -534,7 +548,11 @@ class SpecTools():
             plt.subplot(211)
             plt.plot(wl, fl_prev, color = 'k')
             plt.plot(wl, spline, color = 'r')
-            plt.title('Continuum Fit')
+            plt.title('Continuum Fit (iteration %i/%i)' % (niter + 1, niter + 1))
+            up = np.quantile(fl_prev, 0.7) + 1
+            low = np.quantile(fl_prev, 0.2) - 1
+            plt.ylim(low,)
+
             plt.subplot(212)
             plt.plot(wl, fl_norm, color = 'k')
             plt.vlines(exclude_wl, ymin = fl_norm.min(), ymax = fl_norm.max(), color = 'k', 
@@ -546,7 +564,7 @@ class SpecTools():
         return fl_norm, nivar
 
 
-    def get_line_rv(self, wl, fl, ivar, centroid, distance = 150, edge = 10, nmodel = 3, plot = False):
+    def get_line_rv(self, wl, fl, ivar, centroid, distance = 150, edge = 10, nmodel = 3, plot = False, rv_kwargs = dict(plot = False)):
 
         c1 = bisect_left(wl, centroid - distance)
         c2 = bisect_left(wl, centroid + distance)
@@ -586,7 +604,7 @@ class SpecTools():
         res.params['g0_center'].set(value = centroid)
         template = model.eval(res.params, x = cwl)
 
-        rv, e_rv = self.get_rv(cwl, nfl, nivar, cwl, template, kwargs = dict(plot = False))
+        rv, e_rv = self.get_rv(cwl, nfl, nivar, cwl, template, **rv_kwargs)
 
         if plot:
             fit_center = centroid + rv * 1e3 * centroid / c.c.value

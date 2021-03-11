@@ -181,7 +181,6 @@ class GFP:
                       metrics = ['mae'])
         return model
 
-
     def synth_spectrum_sampler(self, wl, teff, logg, rv, specclass = None):
         """
         Generates synthetic spectra from labels using the neural network, translated by some radial velocity. These are _not_ interpolated onto the requested wavelength grid;
@@ -264,11 +263,11 @@ class GFP:
             nanwhere = np.isnan(synth)
             dummy_ivar[nanwhere] = 0
             synth[nanwhere] = 0
-            synth,_ = self.spline_norm_DA(wl, synth, dummy_ivar)
+            synth,_ = self.spline_norm_DA(wl, synth, dummy_ivar) # Use default KW from function
             synth[nanwhere] = np.nan
 
         if len(polyargs) > 0:
-            synth = synth + chebval(2*(wl - wl.min() / (wl.max())) - 1.0, polyargs)
+            synth = synth + chebval(2 * (wl - wl.min()) / (wl.max() - wl.min()) - 1, polyargs)
 
         return synth
 
@@ -411,16 +410,34 @@ class GFP:
 
     #     return ret
 
-    def spline_norm_DA(self, wl, fl, ivar, kwargs = {}):
-        fl_norm, ivar_norm = self.sp.spline_norm(wl, fl, ivar, self.exclude_wl, **kwargs)
-        return fl_norm, ivar_norm
+    def spline_norm_DA(self, wl, fl, ivar, kwargs = dict(k = 3, sfac = 1, niter = 3), crop = None): # SETS DEFAULT KW
+
+        if crop is not None:
+            c1 = bisect_left(wl, crop[0])
+            c2 = bisect_left(wl, crop[1])
+
+            wl = wl[c1:c2]
+            fl = fl[c1:c2]
+            ivar = ivar[c1:c2]
+
+        try:
+            fl_norm, ivar_norm = self.sp.spline_norm(wl, fl, ivar, self.exclude_wl, **kwargs)
+        except:
+            print('spline normalization failed... returning NaNs')
+            fl_norm, ivar_norm = np.nan*fl, np.nan*ivar
+
+        if crop is not None:
+            return wl, fl_norm, ivar_norm
+
+        else:
+            return fl_norm, ivar_norm
 
     def fit_spectrum(self, wl, fl, ivar = None, nwalkers = 50, burn = 50, ndraws = 25, make_plot = True, threads = 1, \
                     plot_trace = False, prior_teff = None, savename = None, isbinary = None, mask_threshold = 100,
                     DA = True, progress = True,
                     polyorder = 2, plot_init = False, plot_corner = False, plot_corner_full = False, verbose = True,
                     norm_kw = {}, mcmc = False,
-                    lines = ['alpha', 'beta', 'gamma', 'delta', 'eps', 'h8'], maxfev = 1000):
+                    lines = ['alpha', 'beta', 'gamma', 'delta', 'eps', 'h8'], maxfev = 1000, crop = (3600, 7500)):
 
         """
         Main fitting routine, takes a continuum-normalized spectrum and fits it with MCMC to recover steller labels. 
@@ -566,7 +583,7 @@ class GFP:
 
         if DA:
             #wl, fl, ivar, init_soln = self.normalize_DA(wl, fl, ivar, return_soln = True, plot = plot_init, **norm_kw)
-            fl, ivar = self.spline_norm_DA(wl, fl, ivar, kwargs = norm_kw)
+            wl, fl, ivar = self.spline_norm_DA(wl, fl, ivar, kwargs = norm_kw, crop = crop)
 
         #if verbose:
             #print('initial guess: T = %i, logg = %.2f' % (init_soln[0], init_soln[1]))
@@ -609,7 +626,7 @@ class GFP:
         init_prms = [9000, 8]
         if polyorder > 0:
             init_prms.extend(np.zeros(polyorder))
-            init_prms[nstarparams] = 1
+            #init_prms[nstarparams] = 1
         nll = lambda *args: -lnprob(*args)
         cool_soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = maxfev))
         cool_chi = -2 * lnprob(cool_soln.x) / (np.sum(self.mask) - 2)
@@ -621,7 +638,7 @@ class GFP:
         init_prms = [17000, 8]
         if polyorder > 0:
             init_prms.extend(np.zeros(polyorder))
-            init_prms[nstarparams] = 1
+            #init_prms[nstarparams] = 1
         nll = lambda *args: -lnprob(*args) 
         warm_soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = maxfev))
         warm_chi = -2 * lnprob(warm_soln.x) / (np.sum(self.mask) - 2)
