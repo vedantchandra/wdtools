@@ -449,8 +449,8 @@ class SpecTools():
         cc = np.zeros(npoint)
         for ii,rv in enumerate(rvgrid):
             shift_model = self.doppler_shift(temp_wl, temp_fl, rv)
-            #corr = np.corrcoef(fl, shift_model)[1, 0]
-            corr = -np.sum((fl - shift_model)**2) # MINIMIZE LSQ DIFF. MAYBE PROPAGATE IVAR HERE?
+            corr = np.corrcoef(fl, shift_model)[1, 0]
+            #corr = -np.sum((fl - shift_model)**2) # MINIMIZE LSQ DIFF. MAYBE PROPAGATE IVAR HERE?
             cc[ii] = corr
         return rvgrid, cc
 
@@ -564,7 +564,7 @@ class SpecTools():
         return fl_norm, nivar
 
 
-    def get_line_rv(self, wl, fl, ivar, centroid, distance = 150, edge = 10, nmodel = 3, plot = False, rv_kwargs = dict(plot = False)):
+    def get_line_rv(self, wl, fl, ivar, centroid, distance = 150, edge = 10, nmodel = 3, plot = False, rv_kwargs = {}):
 
         c1 = bisect_left(wl, centroid - distance)
         c2 = bisect_left(wl, centroid + distance)
@@ -588,16 +588,21 @@ class SpecTools():
 
         params = model.make_params()
 
-        for ii in range(nmodel):
-            params['g' + str(ii) + '_center'].set(value = centroid, vary = False, expr = 'g0_center')
-            params['g' + str(ii) + '_sigma'].set(value = 25, vary = True)
-            params['g' + str(ii) + '_amplitude'].set(value = 35/nmodel, vary = True)
+        init_center = cwl[np.argmax(nfl)]
 
-        params['g0_center'].set(value = centroid, vary = True, expr = None)
-        
+        print(init_center)
+
+        for ii in range(nmodel):
+            params['g' + str(ii) + '_center'].set(value = init_center, vary = False, expr = 'g0_center')
+            params['g' + str(ii) + '_sigma'].set(value = 10, vary = True)
+            params['g' + str(ii) + '_amplitude'].set(value = 5/nmodel, vary = True)
+
+        params['g0_center'].set(value = init_center, vary = True, expr = None)
+
+
         if plot:
             plt.plot(cwl, 1-nfl)
-            #plt.plot(cwl, model.eval(params, x = cwl))
+            plt.plot(cwl, 1-model.eval(params, x = cwl))
 
         res = model.fit(nfl, params, x = cwl, method = 'nelder')
 

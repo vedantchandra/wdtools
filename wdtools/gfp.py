@@ -437,7 +437,8 @@ class GFP:
                     DA = True, progress = True,
                     polyorder = 2, plot_init = False, plot_corner = False, plot_corner_full = False, verbose = True,
                     norm_kw = {}, mcmc = False,
-                    lines = ['alpha', 'beta', 'gamma', 'delta', 'eps', 'h8'], maxfev = 1000, crop = (3600, 7500)):
+                    lines = ['alpha', 'beta', 'gamma', 'delta', 'eps', 'h8'], maxfev = 1000, crop = (3600, 7500),
+                    lmfit_kw = {}, rv_kw = {}, nteff = 3):
 
         """
         Main fitting routine, takes a continuum-normalized spectrum and fits it with MCMC to recover steller labels. 
@@ -516,8 +517,6 @@ class GFP:
 
         prior_highs = [40000, 9.5]
 
-        ###### REFACTOR BELOW INTO CONTNORM ################
-
         nstarparams = 2
 
         def lnlike(prms):
@@ -552,29 +551,8 @@ class GFP:
             return lp + lnlike(prms)
 
 
-        # init_prms = list(init_soln[0:2])
-        # init_prms.extend(chebfit(2*(wl - wl.min() / (wl.max())) - 1.0, fl, cont_polyorder))
         param_names = ['$T_{eff}$', '$\log{g}$']
         param_names.extend(['$c_%i$' % ii for ii in range(polyorder + 1)])
-
-
-        # bounds = [];
-        # for jj in range(nstarparams + polyorder + 1):
-        #     if jj < nstarparams:
-        #         bounds.append([prior_lows[jj], prior_highs[jj]])
-        #     else:
-        #         bounds.append([-np.inf, np.inf])
-
-        # bounds_lo = prior_lows[:nstarparams]
-        # bounds_hi = prior_highs[:nstarparams]
-
-        # for jj in range(polyorder + 1):
-        #     bounds_lo.append(-np.inf)
-        #     bounds_hi.append(np.inf)
-
-        # bounds = (bounds_lo, bounds_hi)
-
-        # print(bounds)
 
         if verbose: 
             print('fitting continuum...')
@@ -582,11 +560,8 @@ class GFP:
         norm_kw['plot'] = plot_init
 
         if DA:
-            #wl, fl, ivar, init_soln = self.normalize_DA(wl, fl, ivar, return_soln = True, plot = plot_init, **norm_kw)
             wl, fl, ivar = self.spline_norm_DA(wl, fl, ivar, kwargs = norm_kw, crop = crop)
 
-        #if verbose:
-            #print('initial guess: T = %i, logg = %.2f' % (init_soln[0], init_soln[1]))
         self.cont_fixed = True
 
         edges = [];
@@ -605,60 +580,54 @@ class GFP:
         self.mask = mask.astype(bool)
         edges = np.flip(edges)
         self.edges = edges
-        #print(edges)
-
-        # plt.plot(wl, fl)
-        # plt.plot(wl, self.spectrum_sampler(wl, *[17000, 7.9, 10]))
-        # plt.plot(wl, self.spectrum_sampler(wl, *[8000, 8.5, 120]))
-        # plt.show()
-
-
-        # plt.plot(wl, 1 / np.sqrt(ivar))
-        # plt.show()
-
-        ## CORRECT RV
 
         ## ++++ TO DO +++++ IMPLEMENT LMFIT HERE, WITH GLOBAL OPTIMIZATION
 
+        ######## LMFIT
 
-        if verbose:
-            print('fitting cool solution...')
-        init_prms = [9000, 8]
-        if polyorder > 0:
-            init_prms.extend(np.zeros(polyorder))
-            #init_prms[nstarparams] = 1
-        nll = lambda *args: -lnprob(*args)
-        cool_soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = maxfev))
-        cool_chi = -2 * lnprob(cool_soln.x) / (np.sum(self.mask) - 2)
-        if verbose:
-            print('cool solution: T = %i K, logg = %.1f dex, redchi = %.2f' % (cool_soln.x[0], cool_soln.x[1], cool_chi))
+        tscale = 10000
+        lscale = 8
 
-        if verbose:
-            print('fitting warm solution...')
-        init_prms = [17000, 8]
-        if polyorder > 0:
-            init_prms.extend(np.zeros(polyorder))
-            #init_prms[nstarparams] = 1
-        nll = lambda *args: -lnprob(*args) 
-        warm_soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = maxfev))
-        warm_chi = -2 * lnprob(warm_soln.x) / (np.sum(self.mask) - 2)
-        if verbose:
-            print('warm solution: T = %i K, logg = %.1f dex, redchi = %.2f' % (warm_soln.x[0], warm_soln.x[1], warm_chi))
+        params = lmfit.Parameters()
+        params.add('teff', value = 12000 / tscale, min = 6500 / tscale, max = 40000 / tscale)
+        params.add('logg', value = 8/lscale, min = 6.5/lscale, max = 9.5/lscale)
 
-        if cool_chi < warm_chi:
-            soln = cool_soln.x
-            chi = cool_chi
-            tstr = 'cool'
-        else:
-            soln = warm_soln.x
-            chi = warm_chi
-            tstr = 'warm'
+        for ii in range(polyorder):
+            params.add('c_' + str(ii), value = 0, min = -1, max = 1)
+
+
+        def residual(params):
+            params = np.array(params)
+            params[0] = params[0] * tscale
+            params[1] = params[1] * lscale
+            model = self.spectrum_sampler(wl, *params)
+            resid = fl - model
+            chi = resid * np.sqrt(ivar)
+
+            #print(np.sum(chi**2) / (np.sum(self.mask) - len(params)))
+
+            return chi[self.mask]
+
+        # res = lmfit.minimize(residual, params, **lmfit_kw)
+        # params_arr = np.array(res.params)
+        # teff = res.params['teff'].value * tscale
+        # e_teff = res.params['teff'].stderr * tscale
+        # logg = res.params['logg'].value * lscale
+        # e_logg = res.params['logg'].stderr * lscale
+        # print(teff, e_teff)
+        # print(logg, e_logg)
+
+
 
 
         if verbose:
             print('fitting radial velocity...')
-        template = self.spectrum_sampler(wl, *soln[0:2]) ## FIX THIS!! ----------------------------------------
-        self.rv, e_rv = self.sp.get_rv(wl, fl, ivar, wl, template)
+        
+        self.rv, e_rv = self.sp.get_line_rv(wl, fl, ivar, self.centroid_dict['alpha'], **rv_kw)
+
+
+
+        #self.rv, e_rv = self.sp.get_rv(wl, fl, ivar, wl, template)
         star_rv = self.rv
         print('Radial Velocity = %i ± %i km/s' % (self.rv, e_rv))
         self.rv_fixed = True
@@ -666,11 +635,90 @@ class GFP:
         if verbose:
             print('final optimization...')
 
-        nll = lambda *args: -lnprob(*args) 
-        soln = scipy.optimize.minimize(nll, soln, method = 'Nelder-Mead', options = dict(maxfev = maxfev))
 
-        mle = soln.x
-        stds = np.zeros(len(mle))
+        teffgrid = np.linspace(7000, 39000, nteff)
+
+        chimin = 1e50
+
+        for teff in teffgrid:
+            params['teff'].set(value = teff / tscale)
+            res_i = lmfit.minimize(residual, params, **lmfit_kw)
+            chi = np.sum(res_i.residual**2)
+            if chi < chimin:
+                res = res_i
+                print('found better chi! teff = %i' %teff)
+                print(chi)
+                chimin = chi
+
+
+        teff = res.params['teff'].value * tscale
+        logg = res.params['logg'].value * lscale
+        redchi = np.sum(res.residual**2) / (np.sum(self.mask) - (2 + polyorder))
+
+        try:
+            e_teff = res.params['teff'].stderr * tscale
+            e_logg = res.params['logg'].stderr * lscale
+        except:
+            e_teff = np.nan
+            e_logg = np.nan
+
+        print(teff, e_teff)
+        print(logg, e_logg)
+
+
+        #######################
+
+
+        # if verbose:
+        #     print('fitting cool solution...')
+        # init_prms = [9000, 8]
+        # if polyorder > 0:
+        #     init_prms.extend(np.zeros(polyorder))
+        #     #init_prms[nstarparams] = 1
+        # nll = lambda *args: -lnprob(*args)
+        # cool_soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = maxfev))
+        # cool_chi = -2 * lnprob(cool_soln.x) / (np.sum(self.mask) - 2)
+        # if verbose:
+        #     print('cool solution: T = %i K, logg = %.1f dex, redchi = %.2f' % (cool_soln.x[0], cool_soln.x[1], cool_chi))
+
+        # if verbose:
+        #     print('fitting warm solution...')
+        # init_prms = [17000, 8]
+        # if polyorder > 0:
+        #     init_prms.extend(np.zeros(polyorder))
+        #     #init_prms[nstarparams] = 1
+        # nll = lambda *args: -lnprob(*args) 
+        # warm_soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = maxfev))
+        # warm_chi = -2 * lnprob(warm_soln.x) / (np.sum(self.mask) - 2)
+        # if verbose:
+        #     print('warm solution: T = %i K, logg = %.1f dex, redchi = %.2f' % (warm_soln.x[0], warm_soln.x[1], warm_chi))
+
+        # if cool_chi < warm_chi:
+        #     soln = cool_soln.x
+        #     chi = cool_chi
+        #     tstr = 'cool'
+        # else:
+        #     soln = warm_soln.x
+        #     chi = warm_chi
+        #     tstr = 'warm'
+
+
+        # if verbose:
+        #     print('fitting radial velocity...')
+        # template = self.spectrum_sampler(wl, *soln[0:2]) ## FIX THIS!! ----------------------------------------
+        # self.rv, e_rv = self.sp.get_rv(wl, fl, ivar, wl, template)
+        # star_rv = self.rv
+        # print('Radial Velocity = %i ± %i km/s' % (self.rv, e_rv))
+        # self.rv_fixed = True
+
+        # if verbose:
+        #     print('final optimization...')
+
+        # nll = lambda *args: -lnprob(*args) 
+        # soln = scipy.optimize.minimize(nll, soln, method = 'Nelder-Mead', options = dict(maxfev = maxfev))
+
+        mle = [teff, logg]
+        stds = [e_teff, e_logg]
         redchi = chi
 
         if mcmc:
