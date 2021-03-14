@@ -10,7 +10,6 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.utils import resample
 import scipy
 
-plt.rcParams.update({'font.size': 18})
 path = os.path.abspath(__file__)
 dir_path = os.path.dirname(path)
 

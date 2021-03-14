@@ -564,7 +564,7 @@ class SpecTools():
         return fl_norm, nivar
 
 
-    def get_line_rv(self, wl, fl, ivar, centroid, distance = 150, edge = 10, nmodel = 3, plot = False, rv_kwargs = {}):
+    def get_line_rv(self, wl, fl, ivar, centroid, template = None, return_template = False, distance = 150, edge = 10, nmodel = 3, plot = False, rv_kwargs = {}):
 
         c1 = bisect_left(wl, centroid - distance)
         c2 = bisect_left(wl, centroid + distance)
@@ -580,46 +580,52 @@ class SpecTools():
         nfl = 1 - cfl / line
         nivar = civar * line**2
 
-        for ii in range(nmodel):
-            if ii == 0:
-                model = VoigtModel(prefix = 'g' + str(ii) + '_')
-            else:
-                model += VoigtModel(prefix = 'g' + str(ii) + '_')
-
-        params = model.make_params()
-
-        init_center = cwl[np.argmax(nfl)]
-
-        print(init_center)
-
-        for ii in range(nmodel):
-            params['g' + str(ii) + '_center'].set(value = init_center, vary = False, expr = 'g0_center')
-            params['g' + str(ii) + '_sigma'].set(value = 10, vary = True)
-            params['g' + str(ii) + '_amplitude'].set(value = 5/nmodel, vary = True)
-
-        params['g0_center'].set(value = init_center, vary = True, expr = None)
-
+        vel = c.c.value * 1e-3 * (cwl - centroid) / centroid
 
         if plot:
-            plt.plot(cwl, 1-nfl)
-            plt.plot(cwl, 1-model.eval(params, x = cwl))
+            plt.plot(vel, 1-nfl, 'k')
 
-        res = model.fit(nfl, params, x = cwl, method = 'nelder')
+        if template is None:
 
-        res.params['g0_center'].set(value = centroid)
-        template = model.eval(res.params, x = cwl)
+            for ii in range(nmodel):
+                if ii == 0:
+                    model = VoigtModel(prefix = 'g' + str(ii) + '_')
+                else:
+                    model += VoigtModel(prefix = 'g' + str(ii) + '_')
+
+            params = model.make_params()
+
+            init_center = centroid
+
+            #print(init_center)
+
+            for ii in range(nmodel):
+                params['g' + str(ii) + '_center'].set(value = init_center, vary = False, expr = 'g0_center')
+                params['g' + str(ii) + '_sigma'].set(value = 10, vary = True)
+                params['g' + str(ii) + '_amplitude'].set(value = 10/nmodel, vary = True)
+
+            params['g0_center'].set(value = init_center, vary = True, expr = None)
+
+            res = model.fit(nfl, params, x = cwl, method = 'nelder')
+
+            res.params['g0_center'].set(value = centroid)
+
+            template = model.eval(res.params, x = cwl)
+
+            if plot:
+                plt.plot(vel, 1-model.eval(params, x = cwl), 'b')
 
         rv, e_rv = self.get_rv(cwl, nfl, nivar, cwl, template, **rv_kwargs)
 
         if plot:
-            fit_center = centroid + rv * 1e3 * centroid / c.c.value
-            res.params['g0_center'].set(value = fit_center)
-            plt.plot(cwl, 1-model.eval(res.params, x = cwl), 'r')
-            plt.xlabel('Wavelength')
+            plt.plot(vel, 1 - self.doppler_shift(cwl, template, rv), 'r')
+            plt.xlabel('Relative Velocity')
             plt.ylabel('Normalized Flux')
             plt.title('RV = %.1f ± %.1f km/s' % (rv, e_rv))
-            plt.axvline(centroid, color = 'k', linestyle = '--')
-            plt.axvline(fit_center, color = 'r', linestyle = '--')
+            plt.axvline(0, color = 'k', linestyle = '--')
+            plt.axvline(rv, color = 'r', linestyle = '--')
 
-        
-        return rv, e_rv
+        if return_template:
+            return rv, e_rv, template
+        else:
+            return rv, e_rv

@@ -45,9 +45,6 @@ planck_h = 6.62607004e-34
 speed_light = 299792458
 k_B = 1.38064852e-23
 
-
-plt.rcParams.update({'font.size': 16})
-
 def find_nearest(array, value):
     array = np.asarray(array)
     idx = (np.abs(array - value)).argmin()
@@ -87,8 +84,9 @@ class GFP:
         self.resolution['DA'] = resolution * pix_per_a
         self.model['DA'] = self.model_DA
         self.lamgrid['DA'] = self.lamgrid_DA
-        self.exclude_wl = [3790, 3810, 3819, 3855,3863, 3920, 3930 , 4020 , 4040, 4180, 4215,
-                       4490, 4662.68, 5062.68, 6314.61, 6814.61];
+        self.exclude_wl_default = np.array([3790, 3810, 3819, 3855,3863, 3920, 3930 , 4020 , 4040, 4180, 4215,
+                       4490, 4662.68, 5062.68, 6314.61, 6814.61]);
+        self.exclude_wl = self.exclude_wl_default
 
         self.cont_fixed = False
         self.rv_fixed = False
@@ -267,7 +265,7 @@ class GFP:
             synth[nanwhere] = np.nan
 
         if len(polyargs) > 0:
-            synth = synth + chebval(2 * (wl - wl.min()) / (wl.max() - wl.min()) - 1, polyargs)
+            synth = synth * chebval(2 * (wl - wl.min()) / (wl.max() - wl.min()) - 1, polyargs)
 
         return synth
 
@@ -432,13 +430,14 @@ class GFP:
         else:
             return fl_norm, ivar_norm
 
-    def fit_spectrum(self, wl, fl, ivar = None, nwalkers = 50, burn = 50, ndraws = 25, make_plot = True, threads = 1, \
+    def fit_spectrum(self, wl, fl, ivar = None, nwalkers = 25, burn = 25, ndraws = 25, make_plot = True, threads = 1, \
                     plot_trace = False, prior_teff = None, savename = None, isbinary = None, mask_threshold = 100,
                     DA = True, progress = True,
-                    polyorder = 2, plot_init = False, plot_corner = False, plot_corner_full = False, verbose = True,
+                    polyorder = 0, plot_init = False, plot_corner = False, plot_corner_full = False, verbose = True,
                     norm_kw = {}, mcmc = False,
                     lines = ['alpha', 'beta', 'gamma', 'delta', 'eps', 'h8'], maxfev = 1000, crop = (3600, 7500),
-                    lmfit_kw = {}, rv_kw = {}, nteff = 3):
+                    lmfit_kw = dict(method = 'leastsq', epsfcn = 0.1), rv_kw = dict(plot = False, distance = 50, nmodel = 2, edge = 10),
+                            nteff = 3, fullspec = False, rv_line = 'alpha'):
 
         """
         Main fitting routine, takes a continuum-normalized spectrum and fits it with MCMC to recover steller labels. 
@@ -554,10 +553,20 @@ class GFP:
         param_names = ['$T_{eff}$', '$\log{g}$']
         param_names.extend(['$c_%i$' % ii for ii in range(polyorder + 1)])
 
+        if verbose:
+            print('fitting radial velocity...')
+        
+        self.rv, e_rv = self.sp.get_line_rv(wl, fl, ivar, self.centroid_dict[rv_line], **rv_kw)
+
         if verbose: 
             print('fitting continuum...')
 
         norm_kw['plot'] = plot_init
+
+        outwl = (self.exclude_wl_default < np.min(wl)) & (self.exclude_wl_default > np.max(wl))
+        self.exclude_wl = self.exclude_wl_default[~outwl]
+        if len(self.exclude_wl) % 2 != 0:
+            print('self.exclude_wl should have an even number of elements!')
 
         if DA:
             wl, fl, ivar = self.spline_norm_DA(wl, fl, ivar, kwargs = norm_kw, crop = crop)
@@ -580,6 +589,8 @@ class GFP:
         self.mask = mask.astype(bool)
         edges = np.flip(edges)
         self.edges = edges
+        if fullspec:
+            self.mask = np.ones(len(fl)).astype(bool)
 
         ## ++++ TO DO +++++ IMPLEMENT LMFIT HERE, WITH GLOBAL OPTIMIZATION
 
@@ -594,6 +605,8 @@ class GFP:
 
         for ii in range(polyorder):
             params.add('c_' + str(ii), value = 0, min = -1, max = 1)
+            if ii == 0:
+                params['c_0'].set(value = 1)
 
 
         def residual(params):
@@ -619,14 +632,6 @@ class GFP:
 
 
 
-
-        if verbose:
-            print('fitting radial velocity...')
-        
-        self.rv, e_rv = self.sp.get_line_rv(wl, fl, ivar, self.centroid_dict['alpha'], **rv_kw)
-
-
-
         #self.rv, e_rv = self.sp.get_rv(wl, fl, ivar, wl, template)
         star_rv = self.rv
         print('Radial Velocity = %i ± %i km/s' % (self.rv, e_rv))
@@ -636,34 +641,44 @@ class GFP:
             print('final optimization...')
 
 
-        teffgrid = np.linspace(7000, 39000, nteff)
+        teffgrid = np.linspace(8000, 35000, nteff)
 
         chimin = 1e50
 
         for teff in teffgrid:
+            print('initializing at teff = %i K' % teff)
             params['teff'].set(value = teff / tscale)
             res_i = lmfit.minimize(residual, params, **lmfit_kw)
             chi = np.sum(res_i.residual**2)
             if chi < chimin:
                 res = res_i
-                print('found better chi! teff = %i' %teff)
-                print(chi)
                 chimin = chi
 
-
+        param_arr = np.array(res.params)
         teff = res.params['teff'].value * tscale
         logg = res.params['logg'].value * lscale
+        if polyorder > 0:
+            cheb_coef = np.array(res.params)[2:]
         redchi = np.sum(res.residual**2) / (np.sum(self.mask) - (2 + polyorder))
+
+        have_stderr = False
 
         try:
             e_teff = res.params['teff'].stderr * tscale
             e_logg = res.params['logg'].stderr * lscale
+            have_stderr = True
         except:
             e_teff = np.nan
             e_logg = np.nan
+            print('no errors from lmfit...')
 
-        print(teff, e_teff)
-        print(logg, e_logg)
+        try:
+            e_coefs = [res.params['c_' + str(ii)].stderr for ii in range(polyorder)]
+        except:
+            e_coefs = 1e-2 * np.array(cheb_coef)
+
+        # print(teff, e_teff)
+        # print(logg, e_logg)
 
 
         #######################
@@ -719,11 +734,12 @@ class GFP:
 
         mle = [teff, logg]
         stds = [e_teff, e_logg]
-        redchi = chi
+
+        if polyorder > 0:
+            mle.extend(cheb_coef)
+            stds.extend(e_coefs)
 
         if mcmc:
-            if  verbose:
-                print('initializing at %s solution, T = %i K, logg = %.1f dex' % (tstr, mle[0], mle[1]))
 
             ndim = len(mle)
             
@@ -731,9 +747,18 @@ class GFP:
 
             pos0 = np.zeros((nwalkers,ndim))
 
+            if have_stderr and polyorder == 0: # do not trust covariances when polyorder > 0
+                sigmas = stds # USE ERR FROM LMFIT
+            else:
+                sigmas = np.abs(1e-2 * np.array(mle)) # USE 1% ERROR
+
+            init = mle
+
+            print(mle)
+            print(sigmas)
 
             for jj in range(ndim):
-                    pos0[:,jj] = (mle[jj] + 1e-2*mle[jj]*np.random.normal(size = nwalkers))
+                    pos0[:,jj] = (init[jj] + sigmas[jj]*np.random.normal(size = nwalkers))
 
             if verbose:
                 print('burning in chains...')
@@ -757,7 +782,7 @@ class GFP:
             lnprobs = sampler.get_log_prob(flat = True)
             medians = np.median(sampler.flatchain, 0)
             mle = sampler.flatchain[np.argmax(lnprobs)]
-            redchi = -2 * np.max(lnprobs) / (len(wl) - 3)
+            redchi = -2 * np.max(lnprobs) / (len(wl) - ndim)
             stds = np.std(sampler.flatchain, 0)
             self.flatchain = sampler.flatchain
 
@@ -768,15 +793,14 @@ class GFP:
                 print('logg is near bound of the model grid! exercise caution with this result')
 
             if plot_corner:
-
-                plt.rcParams.update({'font.size': 12})
-
                 f = corner.corner(sampler.flatchain[:, :nstarparams], labels = param_names[:nstarparams], \
                          label_kwargs = dict(fontsize =  12), quantiles = (0.16, 0.5, 0.84),
                          show_titles = True, title_kwargs = dict(fontsize = 12))
-                #plt.tight_layout()
+
+                for ax in f.get_axes(): 
+                  ax.tick_params(axis='both', labelsize=12)
                 if savename is not None:
-                    plt.savefig(savename + '_corner.pdf', bbox_inches = 'tight')
+                    plt.savefig(savename + '_corner.jpg', bbox_inches = 'tight', dpi = 100)
                 plt.show()
 
             if plot_corner_full:
@@ -785,6 +809,9 @@ class GFP:
                          label_kwargs = dict(fontsize =  12), quantiles = (0.16, 0.5, 0.84),
                          show_titles = False)
 
+                for ax in f.get_axes(): 
+                  ax.tick_params(axis='both', labelsize=12)
+
 
         fit_fl = self.spectrum_sampler(wl, *mle)
 
@@ -792,8 +819,27 @@ class GFP:
         if make_plot:
             #fig,ax = plt.subplots(ndim, ndim, figsize = (15,15))
 
-            if self.specclass == 'DA':
-                plt.figure(figsize = (8,7))
+            if fullspec:
+                plt.figure(figsize = (10, 8))
+                plt.plot(wl, fl, 'k')
+                plt.plot(wl, fit_fl, 'r')
+                plt.ylabel('Normalized Flux')
+                plt.xlabel('Wavelength')
+
+                plt.ylim(0, 1.5)
+
+                plt.text(0.97, 0.25, '$T_{\mathrm{eff}} = %.0f \pm %.0f\ K$' % (mle[0], stds[0]),
+                 transform = plt.gca().transAxes, fontsize = 15, ha = 'right')
+        
+                plt.text(0.97, 0.15, '$\log{g} = %.2f \pm %.2f $' % (mle[1], stds[1]),
+                         transform = plt.gca().transAxes, fontsize = 15, ha = 'right')
+                 
+                plt.text(0.97, 0.05, '$\chi_r^2$ = %.2f' % (redchi),
+                         transform = plt.gca().transAxes, fontsize = 15, ha = 'right')
+
+
+            else:
+                plt.figure(figsize = (10, 10))
                 breakpoints = [];
                 for kk in range(len(self.edges)):
                     if (kk + 1)%2 == 0:
@@ -809,53 +855,33 @@ class GFP:
                     fit_fl_seg = fit_fl[breakpoints[kk]:breakpoints[kk+1]]
                     peak = int(len(wl_seg)/2)
                     delta_wl = wl_seg - wl_seg[peak]
-                    plt.plot(delta_wl, 1 + fl_seg - 0.2 * kk, 'k')
-                    plt.plot(delta_wl, 1 + fit_fl_seg - 0.2 * kk, 'r')
+                    plt.plot(delta_wl, 1 + fl_seg - 0.25 * kk, 'k')
+                    plt.plot(delta_wl, 1 + fit_fl_seg - 0.25 * kk, 'r')
                 plt.xlabel(r'$\mathrm{\Delta \lambda}\ (\mathrm{\AA})$')
                 plt.ylabel('Normalized Flux')
 
-                plt.text(0.05, 0.85, '$T_{\mathrm{eff}} = %i \pm %i\ K$' % (mle[0], stds[0]),
-                 transform = plt.gca().transAxes, fontsize = 16)
+                plt.text(0.97, 0.8, '$T_{\mathrm{eff}} = %.0f \pm %.0f\ K$' % (mle[0], stds[0]),
+                 transform = plt.gca().transAxes, fontsize = 15, ha = 'right')
         
-                plt.text(0.65, 0.85, '$\log{g} = %.2f \pm %.2f $' % (mle[1], stds[1]),
-                         transform = plt.gca().transAxes, fontsize = 16)
+                plt.text(0.97, 0.7, '$\log{g} = %.2f \pm %.2f $' % (mle[1], stds[1]),
+                         transform = plt.gca().transAxes, fontsize = 15, ha = 'right')
                  
-                plt.text(0.79, 0.75, '$\chi_r^2$ = %.2f' % (redchi),
-                         transform = plt.gca().transAxes, fontsize = 16)
+                plt.text(0.97, 0.6, '$\chi_r^2$ = %.2f' % (redchi),
+                         transform = plt.gca().transAxes, fontsize = 15, ha = 'right')
 
             #     if savename is not None:
             #         plt.savefig(savename + '_fit.pdf', bbox_inches = 'tight')
 
-            plt.figure(figsize = (10,5))
-            plt.plot(wl, fl, 'k')
-            # randidx = np.random.choice(len(sampler.flatchain), size = 10)
-            plt.plot(wl, fit_fl, 'r')
-
-            # for idx in randidx:
-            #     label = sampler.flatchain[idx]
-            #     plt.plot(wl, self.spectrum_sampler(wl, *label), 'r', alpha = 0.25, lw = 0.5)
-            
-            plt.ylabel('Normalized Flux')
-            plt.xlabel('Wavelength ($\mathrm{\AA}$)')
-            plt.minorticks_on()
-            plt.tick_params(which='major', length=10, width=1, direction='in', top = True, right = True)
-            plt.tick_params(which='minor', length=5, width=1, direction='in', top = True, right = True)
-
-            for edge in self.edges:
-                plt.axvline(edge, linestyle = '--', color = 'k', lw = 0.5)
-
             if savename is not None:
-                plt.savefig(savename + '_fit.pdf', bbox_inches = 'tight')
-
-            plt.xlim(self.edges.min() - 100, self.edges.max() + 100)
-            plt.ylim(0, 1.5)
+                plt.savefig(savename + '_fit.jpg', bbox_inches = 'tight', dpi = 100)
             plt.show()
 
+        self.exclude_wl = self.exclude_wl_default
         self.cont_fixed = False
         self.rv = 0 # RESET THESE PARAMETERS
 
-        mle = mle[0:2]
-        stds = stds[0:2]
+        mle = mle#[0:2]
+        stds = stds#[0:2]
 
         mle = np.append(mle, star_rv)
         stds = np.append(stds, e_rv)
