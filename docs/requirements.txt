@@ -10,3 +10,4 @@ tensorflow
 lmfit
 scikit-learn
 nbsphinx
+galpy
