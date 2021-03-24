@@ -564,7 +564,8 @@ class SpecTools():
         return fl_norm, nivar
 
 
-    def get_line_rv(self, wl, fl, ivar, centroid, template = None, return_template = False, distance = 150, edge = 10, nmodel = 3, plot = False, rv_kwargs = {}):
+    def get_line_rv(self, wl, fl, ivar, centroid, template = None, return_template = False, distance = 50, edge = 10, nmodel = 2, plot = False, rv_kwargs = {},
+                        init_width = 20, init_amp = 5):
 
         c1 = bisect_left(wl, centroid - distance)
         c2 = bisect_left(wl, centroid + distance)
@@ -601,8 +602,8 @@ class SpecTools():
 
             for ii in range(nmodel):
                 params['g' + str(ii) + '_center'].set(value = init_center, vary = False, expr = 'g0_center')
-                params['g' + str(ii) + '_sigma'].set(value = 10, vary = True)
-                params['g' + str(ii) + '_amplitude'].set(value = 10/nmodel, vary = True)
+                params['g' + str(ii) + '_sigma'].set(value = init_width, vary = True)
+                params['g' + str(ii) + '_amplitude'].set(value = init_amp/nmodel, vary = True)
 
             params['g0_center'].set(value = init_center, vary = True, expr = None)
 

@@ -2,10 +2,8 @@ sphinxcontrib-bibtex
 emcee
 pandas
 astropy
-keras
 corner
 scipy
-PyAstronomy
 tqdm
 sphinx-autoapi
 tensorflow
