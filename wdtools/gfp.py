@@ -430,14 +430,14 @@ class GFP:
         else:
             return fl_norm, ivar_norm
 
-    def fit_spectrum(self, wl, fl, ivar = None, nwalkers = 25, burn = 25, ndraws = 25, make_plot = True, threads = 1, \
-                    plot_trace = False, prior_teff = None, savename = None, isbinary = None, mask_threshold = 100,
-                    DA = True, progress = True,
-                    polyorder = 0, plot_init = False, plot_corner = False, plot_corner_full = False, verbose = True,
-                    norm_kw = {}, mcmc = False,
-                    lines = ['alpha', 'beta', 'gamma', 'delta', 'eps', 'h8'], maxfev = 1000, crop = (3600, 7500),
-                    lmfit_kw = dict(method = 'leastsq', epsfcn = 0.1), rv_kw = dict(plot = False, distance = 50, nmodel = 2, edge = 10),
-                            nteff = 3, fullspec = False, rv_line = 'alpha'):
+    def fit_spectrum(self, wl, fl, ivar = None, prior_teff = None, mcmc = False, fullspec = False, polyorder = 0, norm_kw = {}, 
+                        nwalkers = 25, burn = 25, ndraws = 25, threads = 1, progress = True,
+                        plot_init = False, make_plot = True, plot_corner = False, plot_corner_full = False, plot_trace = False,  savename = None, 
+                        DA = True, crop = (3600, 7500),
+                        verbose = True,
+                        lines = ['alpha', 'beta', 'gamma', 'delta', 'eps', 'h8'], lmfit_kw = dict(method = 'leastsq', epsfcn = 0.1), 
+                        rv_kw = dict(plot = False, distance = 50, nmodel = 2, edge = 10),
+                        nteff = 3,  rv_line = 'alpha'):
 
         """
         Main fitting routine, takes a continuum-normalized spectrum and fits it with MCMC to recover steller labels. 
@@ -452,6 +452,17 @@ class GFP:
         ivar : array
             Array of observed inverse-variance for uncertainty estimation. If this is not available, use `ivar = None` to infer a constant inverse variance mask using a second-order
             beta-sigma algorithm. In this case, since the errors are approximated, the chi-square likelihood may be inexact - treat returned uncertainties with caution. 
+        prior_teff : tuple, optional
+            Tuple of (mean, sigma) to define a Gaussian prior on the effective temperature parameter. This is especially useful if there is strong prior knowledge of temperature 
+            from photometry. If not provided, a flat prior is used. 
+        mcmc : bool, optional
+            Whether to run MCMC, or simply return the errors estimated by LMFIT
+        fullspec : bool, optional
+            Whether to fit the entire continuum-normalized spectrum, or only the Balmer lines. 
+        polyorder : int, optional
+            Order of additive Chebyshev polynomial during the fitting process. Can usually leave this to zero unless the normalization is really bad. 
+        norm_kw : dict, optional
+            Dictionary of keyword arguments that are passed to the spline normalization routine. 
         nwalkers : int, optional
             Number of independent MCMC 'walkers' that will explore the parameter space
         burn : int, optional
@@ -459,34 +470,46 @@ class GFP:
             a high-probability point, keep this value high to avoid under-estimating uncertainties. 
         ndraws : int, optional
             Number of 'production' steps after the burn-in. The final number of posterior samples will be nwalkers * ndraws.
-        make_plot: bool, optional
-            If True, produces a plot of the best-fit synthetic spectrum over the observed spectrum, as well as a corner plot of the fitted parameters. 
         threads : int, optional
             Number of threads for distributed sampling. 
+        progress : bool, optional
+            Whether to show a progress bar during the MCMC sampling. 
+        plot_init : bool, optional
+            Whether to plot the continuum-normalization routine
+        make_plot: bool, optional
+            If True, produces a plot of the best-fit synthetic spectrum over the observed spectrum. 
+        plot_corner : bool, optional
+            Makes a corner plot of the fitted stellar labels
+        plot_corner_full : bool, optional
+            Makes a corner plot of all sampled parameters, the stellar labels plus any Chebyshev coefficients if polyorder > 0
         plot_trace: bool, optiomal
             If True, plots the trace of posterior samples of each parameter for the production steps. Can be used to visually determine the quality of mixing of
             the chains, and ascertain if a longer burn-in is required. 
-        init : str, optional {'de', 'nm', 'unif', 'mle'}
-            If 'de', the differential evolution algorithm is used to maximize the likelihood before MCMC sampling. It tries both hot and cold solutions, and choosing the one with the lowest chi^2.
-            If 'unif', walkers are initialized uniformly in parameter space before the burn-in phase. If 'mle', there is a pre-burn phase with walkers initialized uniformly in 
-            parameter space. The highest probability (lowest chi square) parameter set is taken as the MLE, and the main burn-in is initialized in a tight n-ball around this high
-            probablity region. For most applications, we recommend using 'de'.
-        prior_teff : tuple, optional
-            Tuple of (mean, sigma) to define a Gaussian prior on the effective temperature parameter. This is especially useful if there is strong prior knowledge of temperature 
-            from photometry. If not provided, a flat prior is used. 
-        mleburn : int, optional
-            Number of steps for the pre-burn phase to estimate the MLE.
         savename : str, optional
             If provided, the corner plot and best-fit plot will be saved as PDFs in the working folder. 
-        normalize_DA : bool, optional
-            If True, normalizes the Balmer lines on a DA spectrum before fitting. We recommend doing the normalization seperately, to ensure it's accurate. 
+        DA : bool, optional
+            Whether the star is a DA white dwarf or not. As of now, this must be set to True. 
+        crop : tuple, optional
+            The region to crop the supplied spectrum before proceeding with the fit. Can be used to exclude low-SN regions at the edge of the spectrum.
+        verbose : bool, optional
+            If True, the routine prints several progress statements to the terminal. 
         lines : array, optional
-            List of Balmer lines to normalize if `normalize_DA = True`. Defaults to all from H-alpha to H8. 
-            
+            List of Balmer lines to utilize in the fit. Defaults to all from H-alpha to H8.
+        lmfit_kw : dict, optional
+            Dictionary of keyword arguments to the LMFIT solver
+        rv_kw : dict, optional
+            Dictionary of keyword arguments to the RV fitting routine
+        nteff : int, optional
+            Number of equidistant temperatures to try as initialization points for the minimization routine. 
+        rv_line : str, optional
+            Which Balmer line to use for the radial velocity fit. We recommend 'alpha'. 
+
         Returns
         -------
             array
-                Returns the fitted stellar labels along with a reduced chi-square statistic with the format: [(Teff, e_teff), (logg, e_logg), redchi]
+                Returns the fitted stellar labels along with a reduced chi-square statistic with the format: [[labels], [e_labels], redchi]. If polyorder > 0,
+                then the returned arrays include the Chebyshev coefficients. The radial velocity (and RV error) are always the last elements in the array, so if
+                polyorder > 0, the label array will have temperature, surface gravity, the Chebyshev coefficients, and then RV. 
         """
 
         self.cont_fixed = False
@@ -502,15 +525,10 @@ class GFP:
             fl = fl[~nans]
             ivar = ivar[~nans]
 
-        if isbinary is None:
-            isbinary == self.isbinary
-
-        if ivar is None: # REPLACE THIS WITH YOUR OWN FUNCTION, REMOVE PYASL DEPENDENCE
+        if ivar is None: # REPLACE THIS WITH YOUR OWN FUNCTION TO ESTIMATE VARIANCE
             print('Please provide an IVAR array')
-            # print('no inverse variance array provided, inferring ivar using the beta-sigma method. the chi-square likelihood will not be exact; treat returned uncertainties with caution!')
-            # beq = pyasl.BSEqSamp()
-            # std, _ = beq.betaSigma(fl, 1, 1)
-            # ivar = np.repeat(1 / std**2, len(fl))
+            raise
+
 
         prior_lows = [6500, 6.5]
 
@@ -592,10 +610,6 @@ class GFP:
         if fullspec:
             self.mask = np.ones(len(fl)).astype(bool)
 
-        ## ++++ TO DO +++++ IMPLEMENT LMFIT HERE, WITH GLOBAL OPTIMIZATION
-
-        ######## LMFIT
-
         tscale = 10000
         lscale = 8
 
@@ -621,18 +635,6 @@ class GFP:
 
             return chi[self.mask]
 
-        # res = lmfit.minimize(residual, params, **lmfit_kw)
-        # params_arr = np.array(res.params)
-        # teff = res.params['teff'].value * tscale
-        # e_teff = res.params['teff'].stderr * tscale
-        # logg = res.params['logg'].value * lscale
-        # e_logg = res.params['logg'].stderr * lscale
-        # print(teff, e_teff)
-        # print(logg, e_logg)
-
-
-
-        #self.rv, e_rv = self.sp.get_rv(wl, fl, ivar, wl, template)
         star_rv = self.rv
         print('Radial Velocity = %i ± %i km/s' % (self.rv, e_rv))
         self.rv_fixed = True
@@ -676,61 +678,6 @@ class GFP:
             e_coefs = [res.params['c_' + str(ii)].stderr for ii in range(polyorder)]
         except:
             e_coefs = 1e-2 * np.array(cheb_coef)
-
-        # print(teff, e_teff)
-        # print(logg, e_logg)
-
-
-        #######################
-
-
-        # if verbose:
-        #     print('fitting cool solution...')
-        # init_prms = [9000, 8]
-        # if polyorder > 0:
-        #     init_prms.extend(np.zeros(polyorder))
-        #     #init_prms[nstarparams] = 1
-        # nll = lambda *args: -lnprob(*args)
-        # cool_soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = maxfev))
-        # cool_chi = -2 * lnprob(cool_soln.x) / (np.sum(self.mask) - 2)
-        # if verbose:
-        #     print('cool solution: T = %i K, logg = %.1f dex, redchi = %.2f' % (cool_soln.x[0], cool_soln.x[1], cool_chi))
-
-        # if verbose:
-        #     print('fitting warm solution...')
-        # init_prms = [17000, 8]
-        # if polyorder > 0:
-        #     init_prms.extend(np.zeros(polyorder))
-        #     #init_prms[nstarparams] = 1
-        # nll = lambda *args: -lnprob(*args) 
-        # warm_soln = scipy.optimize.minimize(nll, init_prms, method = 'Nelder-Mead', options = dict(maxfev = maxfev))
-        # warm_chi = -2 * lnprob(warm_soln.x) / (np.sum(self.mask) - 2)
-        # if verbose:
-        #     print('warm solution: T = %i K, logg = %.1f dex, redchi = %.2f' % (warm_soln.x[0], warm_soln.x[1], warm_chi))
-
-        # if cool_chi < warm_chi:
-        #     soln = cool_soln.x
-        #     chi = cool_chi
-        #     tstr = 'cool'
-        # else:
-        #     soln = warm_soln.x
-        #     chi = warm_chi
-        #     tstr = 'warm'
-
-
-        # if verbose:
-        #     print('fitting radial velocity...')
-        # template = self.spectrum_sampler(wl, *soln[0:2]) ## FIX THIS!! ----------------------------------------
-        # self.rv, e_rv = self.sp.get_rv(wl, fl, ivar, wl, template)
-        # star_rv = self.rv
-        # print('Radial Velocity = %i ± %i km/s' % (self.rv, e_rv))
-        # self.rv_fixed = True
-
-        # if verbose:
-        #     print('final optimization...')
-
-        # nll = lambda *args: -lnprob(*args) 
-        # soln = scipy.optimize.minimize(nll, soln, method = 'Nelder-Mead', options = dict(maxfev = maxfev))
 
         mle = [teff, logg]
         stds = [e_teff, e_logg]
@@ -869,8 +816,7 @@ class GFP:
                 plt.text(0.97, 0.6, '$\chi_r^2$ = %.2f' % (redchi),
                          transform = plt.gca().transAxes, fontsize = 15, ha = 'right')
 
-            #     if savename is not None:
-            #         plt.savefig(savename + '_fit.pdf', bbox_inches = 'tight')
+
 
             if savename is not None:
                 plt.savefig(savename + '_fit.jpg', bbox_inches = 'tight', dpi = 100)
@@ -880,19 +826,13 @@ class GFP:
         self.cont_fixed = False
         self.rv = 0 # RESET THESE PARAMETERS
 
-        mle = mle#[0:2]
-        stds = stds#[0:2]
+        mle = mle
+        stds = stds
 
         mle = np.append(mle, star_rv)
         stds = np.append(stds, e_rv)
 
         return mle, stds, redchi
-
-    def blackbody(self, wl, teff):
-        wl = wl * 1e-10
-        num = 2 * planck_h * speed_light**2
-        denom = wl**5 * (np.exp((planck_h * speed_light) / (wl * k_B * teff)) - 1)
-        return num/denom
     
 if __name__ == '__main__':
     
