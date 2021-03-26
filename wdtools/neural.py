@@ -8,7 +8,6 @@ from lmfit.models import VoigtModel
 import pandas as pd
 import pickle
 import os
-plt.rcParams.update({'font.size': 18})
 path = os.path.abspath(__file__)
 dir_path = os.path.dirname(path)
 import inspect

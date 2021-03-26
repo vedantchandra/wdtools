@@ -43,6 +43,12 @@ autoapi_dirs = [os.path.abspath('./../')]
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
+# import mock
+
+# MOCK_MODULES = ['numpy', 'scipy', 'sklearn', 'matplotlib', 'scipy', 'tensorflow', 'corner', 'emcee']
+# for mod_name in MOCK_MODULES:
+#     sys.modules[mod_name] = mock.Mock()
+
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
@@ -64,3 +70,5 @@ html_theme = "sphinx_rtd_theme"
 html_static_path = ['_static']
 
 master_doc = 'index'
+
+bibtex_bibfiles = ['bib.bib']

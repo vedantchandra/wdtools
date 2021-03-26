@@ -1,14 +1,13 @@
-sphinxcontrib-bibtex
+sphinxcontrib-bibtex<2.0.0
 emcee
 pandas
 astropy
-keras
 corner
 scipy
-PyAstronomy
 tqdm
 sphinx-autoapi
 tensorflow
 lmfit
 scikit-learn
 nbsphinx
+galpy
