@@ -1,13 +1,16 @@
+numpy>1.17
+scipy
+matplotlib
 emcee
 pandas
 astropy
 corner
-scipy
 tqdm
 tensorflow
 lmfit
 scikit-learn
 galpy
+# For docs:
 nbsphinx
 sphinx-autoapi
 sphinxcontrib-bibtex<2.0.0
