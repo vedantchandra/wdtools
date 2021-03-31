@@ -226,9 +226,10 @@ class GFP:
             Effective surface temperature of sampled spectrum
         logg : float
             log surface gravity of sampled spectrum (cgs)
-        rv : float
-            radial velocity (redshift) of sampled spectrum in km/s
-        specclass : str ['DA', 'DB']
+        polyargs : float, optional
+            All subsequent positional arguments are assumed to be coefficients for the additive Chebyshev polynomial. If none are provided,
+            no polynomial is added to the model spectrum. 
+        specclass : str, optional
             Whether to use hydrogen-rich (DA) or helium-rich (DB) atmospheric models. If none, reverts to default. 
         Returns
         -------
@@ -248,14 +249,7 @@ class GFP:
         func = interp1d(self.lamgrid[specclass], synth, fill_value = np.nan, bounds_error = False)
         synth =  func(wl)
 
-        # print(polyargs)
-
         if self.cont_fixed:
-
-            # spline_pars = scipy.interpolate.splrep(wl[self.contmask], synth[self.contmask] / np.median(synth[self.contmask]),
-            #                                     k = 3, s = self.smooth)
-            # mod_smooth_cont = scipy.interpolate.splev(wl, spline_pars) * np.median(synth[self.contmask])
-            # synth = synth / mod_smooth_cont
 
             dummy_ivar = 1 / np.repeat(0.001, len(wl))**2
             nanwhere = np.isnan(synth)
@@ -269,146 +263,31 @@ class GFP:
 
         return synth
 
-    # def normalize_DA(self, wl, fl, ivar = None, cont_polyorder = 3, plot = False,  +++++++++ DO NOT USE, VERY SLOW +++++++
-    #                         lines = ['alpha', 'beta', 'gamma', 'delta', 'eps', 'h8'],
-    #                         maxfev = 500, smooth = 0, crop = True, return_soln = False):
-
-    #     '''
-    #     Continuum-normalization of a DA white dwarf spectrum by fitting a combination of the 
-    #     model spectra and Chebyshev polynomials. 
-        
-    #     Parameters
-    #     ---------
-    #     wl : array
-    #         Wavelength array of spectrum
-    #     fl : array
-    #         Flux array of spectrum
-    #     ivar : array, optional
-    #         Inverse variance array. If `None`, will return only the normalized wavelength and flux. 
-    #     centroid : float
-    #         The theoretical centroid of the absorption line that is being fitted, in wavelength units.
-    #     distance : float
-    #         Distance in Angstroms away from the line centroid to include in the fit. Should include 
-    #         the entire absorption line wings with minimal continum. 
-    #     make_plot : bool, optional
-    #         Whether to plot the linear + Voigt fit. Use for debugging. 
-
-    #     Returns
-    #     -------
-    #         tuple
-    #             Tuple of cropped wavelength, cropped and normalized flux, and (if ivar is not None) 
-    #             cropped and normalized inverse variance array. 
-
-    #     '''
-
-    #     self.smooth = smooth # Spline smoothing factor
-
-    #     ## RESTRICT TO NN DOMAIN ##########
-
-    #     wlbounds = self.lamgrid['DA'].min() + 5, self.lamgrid['DA'].max() - 5
-    #     in1,in2 = bisect_left(wl, wlbounds[0]), bisect_left(wl, wlbounds[1])
-
-    #     wl = wl[in1:in2]
-    #     fl = fl[in1:in2]
-    #     if ivar is not None: ivar = ivar[in1:in2]
-
-    #     ##################################
-
-    #     edges = [];
-    #     breakpoints = [];
-
-    #     mask = np.zeros(len(wl))
-    #     for line in lines:
-    #         c1 = self.centroid_dict[line] - self.distance_dict[line]
-    #         c2 = self.centroid_dict[line] + self.distance_dict[line]
-    #         mask += (wl > c1)*\
-    #                 (wl < c2)
-    #         edges.extend([c1, c2])
-    #         breakpoints.extend([bisect_left(wl, c2), bisect_left(wl, c1)])
-
-    #     self.breakpoints = breakpoints
-    #     self.contmask = ~(mask > 0) # Select continuum pixels
-    #     self.edges = edges
-        
-    #     init_prms = [12000, 8]
-    #     bounds = [(6500, 39000), (6.5, 9.5)]
-    #     init_prms.extend(chebfit(2*(wl - wl.min() / (wl.max())) - 1.0, fl, cont_polyorder))
-    #     bounds.extend([(-np.Inf, np.Inf) for jj in range(cont_polyorder + 1)])
-
-    #     self.mask = np.ones(len(wl)) > 0 ## FIT FULL SPECTRUM FOR CONTINUUM
-
-    #     def residual(params):
-
-    #         params = np.array(params)
-
-    #         if params[0] < 6500 or params[0] > 39000 or params[1] < 6.5 or params[1] > 9.5:
-    #             resid = 1e10
-    #         else:
-    #             resid = (fl - self.spectrum_sampler(wl, *params))[self.contmask]
-    #         if ivar is None: 
-    #             chi2 = (resid**2)
-    #         else: 
-    #             chi2 = (resid**2 * ivar[self.contmask])
-
-    #         print(chi2.sum() / (len(chi2) - len(params)))
-    #         return chi2
-
-    #     # soln = scipy.optimize.minimize(residual, init_prms, method = 'lm', options = dict(maxfev = maxfev),
-    #     #                     )
-
-    #     params = lmfit.Parameters()
-    #     params.add('teff', value = 12000, min = 6500, max = 40000)
-    #     params.add('logg', value = 8, min = 6.5, max = 9.5)
-    #     for ii in range(cont_polyorder + 1):
-    #         params.add('c_' + str(ii), value = init_prms[ii + 2])
-
-    #     print(params)
-        
-    #     res = lmfit.minimize(residual, params, method = 'leastsq', xtol = 1e-15, ftol = 1e-15)
-    #     soln = np.array(res.params)
-
-    #     self.mask = ~self.contmask
-
-    #     model = self.spectrum_sampler(wl, *soln)
-    #     spline_pars = scipy.interpolate.splrep(wl[self.contmask], model[self.contmask] / np.median(model[self.contmask]),
-    #                                             k = 3, s = self.smooth)
-
-    #     smooth_cont = scipy.interpolate.splev(wl, spline_pars) * np.median(model[self.contmask])
-
-    #     if plot:
-    #         plt.figure(figsize = (8, 6))
-    #         plt.plot(wl, fl, 'k', label = 'Data')
-    #         plt.plot(wl, model, 'r', label = 'Star + Continuum')
-    #         plt.plot(wl[self.contmask], smooth_cont[self.contmask], 'go', label = 'Continuum')
-    #         plt.xlabel('Wavelength')
-    #         plt.ylabel('Flux')
-    #         plt.legend()
-    #         plt.show()
-
-    #     fl = fl / smooth_cont
-
-    #     if crop:
-    #         wl = wl[(breakpoints[-1] - 5):(breakpoints[0] + 5)]
-    #         fl = fl[(breakpoints[-1] - 5):(breakpoints[0] + 5)]
-    #         self.contmask = self.contmask[(breakpoints[-1] - 5):(breakpoints[0] + 5)]
-    #         self.mask = ~self.contmask
-
-    #     ret = [wl, fl]
-
-    #     if ivar is not None:
-    #         ivar = ivar * smooth_cont**2
-    #         if crop: ivar = ivar[(breakpoints[-1] - 5):(breakpoints[0] + 5)]
-    #         ret.append(ivar)
-        
-    #     if return_soln:
-
-    #         if soln[0] < 6500 or soln[0] > 39000 or soln[1] < 6.5 or soln[1] > 9.5:
-    #             print('continuum stellar solution out of bounds of NN, do not trust') 
-    #         ret.append(soln)
-
-    #     return ret
 
     def spline_norm_DA(self, wl, fl, ivar, kwargs = dict(k = 3, sfac = 1, niter = 3), crop = None): # SETS DEFAULT KW
+                """
+        Masks out Balmer lines, fits a smoothing spline to the continuum, and returns a continuum-normalized spectrum
+        
+        Parameters
+        ----------
+        wl : array
+            Array of observed spectral wavelengths.
+        fl : array
+            Array of observed spectral fluxes.
+        ivar : array
+            Array of observed inverse-variance. 
+        kwargs : dict, optional
+            Keyword arguments that are passed to the spline normalization function
+        crop : tuple, optional
+            Defines a start and end wavelength to crop the spectrum to before continuum-normalization. 
+
+        Returns
+        -------
+            tuple
+                If crop is None, returns a 2-tuple of (normalized_flux, normalized_ivar). If a crop region is provided, 
+                then returns a 3-tuple of (cropped_wavelength, cropped_normalized_flux, cropped_normalized_ivar). 
+        """
+
 
         if crop is not None:
             c1 = bisect_left(wl, crop[0])
@@ -838,9 +717,8 @@ if __name__ == '__main__':
     
     gfp = GFP(resolution = 3)
     wl = np.linspace(4000, 8000, 4000)
-    fl = gfp.spectrum_sampler(wl, 6500, 6.58, 0)
+    fl = gfp.spectrum_sampler(wl, 6500, 6.58)
     
     plt.plot(wl, fl)
     
-    result = gfp.fit_spectrum(wl, fl,  burn = 1, ndraws = 1, 
-                              )
+    result = gfp.fit_spectrum(wl, fl,  mcmc = False)
