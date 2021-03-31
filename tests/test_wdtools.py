@@ -1,3 +1,6 @@
+import sys
+sys.path.append('../')
+
 import wdtools
 import numpy as np
 
