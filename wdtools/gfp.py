@@ -265,7 +265,7 @@ class GFP:
 
 
 	def spline_norm_DA(self, wl, fl, ivar, kwargs = dict(k = 3, sfac = 1, niter = 3), crop = None): # SETS DEFAULT KW
-				"""
+		"""
 		Masks out Balmer lines, fits a smoothing spline to the continuum, and returns a continuum-normalized spectrum
 		
 		Parameters

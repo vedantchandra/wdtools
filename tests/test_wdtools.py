@@ -1,5 +1,5 @@
 import sys
-sys.path.append('../')
+sys.path.append('../wdtools/')
 
 import wdtools
 import numpy as np
