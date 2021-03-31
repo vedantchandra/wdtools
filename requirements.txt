@@ -1,0 +1,13 @@
+emcee
+pandas
+astropy
+corner
+scipy
+tqdm
+tensorflow
+lmfit
+scikit-learn
+galpy
+nbsphinx
+sphinx-autoapi
+sphinxcontrib-bibtex<2.0.0
