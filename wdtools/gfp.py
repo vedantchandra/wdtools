@@ -447,7 +447,7 @@ class GFP:
 			return lp + lnlike(prms)
 
 
-		param_names = ['$T_{eff}$', '$\log{g}$']
+		param_names = [r'$T_{eff}$', r'$\log{g}$']
 		param_names.extend(['$c_%i$' % ii for ii in range(polyorder + 1)])
 
 		if verbose:
@@ -619,7 +619,7 @@ class GFP:
 				print('logg is near bound of the model grid! exercise caution with this result')
 
 			if plot_corner:
-				f = corner.corner(sampler.flatchain[:, :nstarparams], labels = param_names[:nstarparams], \
+				f = corner.corner(sampler.flatchain[:, :nstarparams], labels = param_names[:nstarparams],
 						 label_kwargs = dict(fontsize =  12), quantiles = (0.16, 0.5, 0.84),
 						 show_titles = True, title_kwargs = dict(fontsize = 12))
 
@@ -631,7 +631,7 @@ class GFP:
 
 			if plot_corner_full:
 
-				f = corner.corner(sampler.flatchain, labels = param_names, \
+				f = corner.corner(sampler.flatchain, labels = param_names, 
 						 label_kwargs = dict(fontsize =  12), quantiles = (0.16, 0.5, 0.84),
 						 show_titles = False)
 
@@ -654,13 +654,13 @@ class GFP:
 
 				plt.ylim(0, 1.5)
 
-				plt.text(0.97, 0.25, '$T_{\mathrm{eff}} = %.0f \pm %.0f\ K$' % (mle[0], stds[0]),
+				plt.text(0.97, 0.25, r'$T_{\mathrm{eff}} = %.0f \pm %.0f\ K$' % (mle[0], stds[0]),
 				 transform = plt.gca().transAxes, fontsize = 15, ha = 'right')
 		
-				plt.text(0.97, 0.15, '$\log{g} = %.2f \pm %.2f $' % (mle[1], stds[1]),
+				plt.text(0.97, 0.15, r'$\log{g} = %.2f \pm %.2f $' % (mle[1], stds[1]),
 						 transform = plt.gca().transAxes, fontsize = 15, ha = 'right')
 				 
-				plt.text(0.97, 0.05, '$\chi_r^2$ = %.2f' % (redchi),
+				plt.text(0.97, 0.05, r'$\chi_r^2$ = %.2f' % (redchi),
 						 transform = plt.gca().transAxes, fontsize = 15, ha = 'right')
 
 
@@ -686,13 +686,13 @@ class GFP:
 				plt.xlabel(r'$\mathrm{\Delta \lambda}\ (\mathrm{\AA})$')
 				plt.ylabel('Normalized Flux')
 
-				plt.text(0.97, 0.8, '$T_{\mathrm{eff}} = %.0f \pm %.0f\ K$' % (mle[0], stds[0]),
+				plt.text(0.97, 0.8, r'$T_{\mathrm{eff}} = %.0f \pm %.0f\ K$' % (mle[0], stds[0]),
 				 transform = plt.gca().transAxes, fontsize = 15, ha = 'right')
 		
-				plt.text(0.97, 0.7, '$\log{g} = %.2f \pm %.2f $' % (mle[1], stds[1]),
+				plt.text(0.97, 0.7, r'$\log{g} = %.2f \pm %.2f $' % (mle[1], stds[1]),
 						 transform = plt.gca().transAxes, fontsize = 15, ha = 'right')
 				 
-				plt.text(0.97, 0.6, '$\chi_r^2$ = %.2f' % (redchi),
+				plt.text(0.97, 0.6, r'$\chi_r^2$ = %.2f' % (redchi),
 						 transform = plt.gca().transAxes, fontsize = 15, ha = 'right')
 
 

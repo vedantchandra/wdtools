@@ -6,11 +6,15 @@ pandas
 astropy
 corner
 tqdm
-tensorflow
+tensorflow==2.4.1
 lmfit
 scikit-learn
 galpy
+
 # For docs:
 nbsphinx
 sphinx-autoapi
 sphinxcontrib-bibtex<2.0.0
+
+# For testing:
+pytest

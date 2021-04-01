@@ -201,10 +201,10 @@ def plot_orbits(name, obj, rv, e_rv, nmc = 10000, norbit = 50):
     eVtot = np.sqrt( (U*eU/Vtot)**2 + (V*eV/Vtot)**2 + (W*eW/Vtot)**2)
     
     twargs = dict(transform = ax1.transAxes, fontsize = 14)
-    ax1.text(0.1, 0.25, '$v_x\ =\ %i\ \pm\ %i km/s$' % (U, eU), **twargs)
-    ax1.text(0.1, 0.2, '$v_y\ =\ %i\ \pm\ %i km/s$' % (V, eV), **twargs)
-    ax1.text(0.1, 0.15, '$v_z\ =\ %i\ \pm\ %i km/s$' % (W, eW), **twargs)
-    ax1.text(0.1, 0.1, '$v_{tot}\ =\ %i\ \pm\ %i km/s$' % (Vtot, eVtot), **twargs)
+    ax1.text(0.1, 0.25, r'$v_x\ =\ %i\ \pm\ %i km/s$' % (U, eU), **twargs)
+    ax1.text(0.1, 0.2, r'$v_y\ =\ %i\ \pm\ %i km/s$' % (V, eV), **twargs)
+    ax1.text(0.1, 0.15, r'$v_z\ =\ %i\ \pm\ %i km/s$' % (W, eW), **twargs)
+    ax1.text(0.1, 0.1, r'$v_{tot}\ =\ %i\ \pm\ %i km/s$' % (Vtot, eVtot), **twargs)
     
     ax1.set_xlim(-30, 30)
     ax1.set_ylim(-10, 10)
