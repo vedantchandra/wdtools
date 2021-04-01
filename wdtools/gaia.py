@@ -2,11 +2,16 @@ import numpy as np
 from scipy import stats
 import emcee
 import matplotlib.pyplot as plt
-import galpy
+
 from astropy import units as u
-from galpy.orbit import Orbit
+try:
+    import galpy
+    from galpy.orbit import Orbit
+    from galpy.potential import MWPotential2014
+except:
+    print('Please install galpy if you want to use the Gaia functions. ')
+
 from astropy.coordinates import SkyCoord
-from galpy.potential import MWPotential2014
 import matplotlib
 
 

@@ -253,7 +253,7 @@ class GFP:
 			nanwhere = np.isnan(synth)
 			dummy_ivar[nanwhere] = 0
 			synth[nanwhere] = 0
-			synth,_ = self.spline_norm_DA(wl, synth, dummy_ivar) # Use default KW from function
+			synth,_ = self.spline_norm_DA(wl, synth, dummy_ivar, kwargs = self.norm_kw) # Use default KW from function
 			synth[nanwhere] = np.nan
 
 		if len(polyargs) > 0:
@@ -295,11 +295,16 @@ class GFP:
 			fl = fl[c1:c2]
 			ivar = ivar[c1:c2]
 
+		# linear = np.polyval(np.polyfit(wl, fl, 2), wl)
+		# fl = fl / linear
+		# ivar = ivar * linear**2 # Initial divide by quadratic continuum
+
 		try:
 			fl_norm, ivar_norm = self.sp.spline_norm(wl, fl, ivar, self.exclude_wl, **kwargs)
 		except:
 			print('spline normalization failed... returning NaNs')
 			fl_norm, ivar_norm = np.nan*fl, np.nan*ivar
+			raise
 
 		if crop is not None:
 			return wl, fl_norm, ivar_norm
@@ -307,13 +312,14 @@ class GFP:
 		else:
 			return fl_norm, ivar_norm
 
-	def fit_spectrum(self, wl, fl, ivar = None, prior_teff = None, mcmc = False, fullspec = False, polyorder = 0, norm_kw = {}, 
+	def fit_spectrum(self, wl, fl, ivar = None, prior_teff = None, mcmc = False, fullspec = False, polyorder = 0, 
+						norm_kw = dict(k = 1, sfac = 0.5, niter = 0), 
 						nwalkers = 25, burn = 25, ndraws = 25, threads = 1, progress = True,
 						plot_init = False, make_plot = True, plot_corner = False, plot_corner_full = False, plot_trace = False,  savename = None, 
 						DA = True, crop = (3600, 7500),
 						verbose = True,
 						lines = ['alpha', 'beta', 'gamma', 'delta', 'eps', 'h8'], lmfit_kw = dict(method = 'leastsq', epsfcn = 0.1), 
-						rv_kw = dict(plot = False, distance = 50, nmodel = 2, edge = 10),
+						rv_kw = dict(plot = False, distance = 100, nmodel = 2, edge = 15),
 						nteff = 3,  rv_line = 'alpha'):
 
 		"""
@@ -463,10 +469,13 @@ class GFP:
 		if len(self.exclude_wl) % 2 != 0:
 			print('self.exclude_wl should have an even number of elements!')
 
+		self.norm_kw = norm_kw
+
 		if DA:
 			wl, fl, ivar = self.spline_norm_DA(wl, fl, ivar, kwargs = norm_kw, crop = crop)
 
 		self.cont_fixed = True
+		self.norm_kw['plot'] = False # Set to True to see how the models are normalized
 
 		edges = [];
 		mask = np.zeros(len(wl))
@@ -513,7 +522,8 @@ class GFP:
 			return chi[self.mask]
 
 		star_rv = self.rv
-		print('Radial Velocity = %i ± %i km/s' % (self.rv, e_rv))
+		if verbose:
+			print('Radial Velocity = %i ± %i km/s' % (self.rv, e_rv))
 		self.rv_fixed = True
 
 		if verbose:
@@ -525,7 +535,8 @@ class GFP:
 		chimin = 1e50
 
 		for teff in teffgrid:
-			print('initializing at teff = %i K' % teff)
+			if verbose:
+				print('initializing at teff = %i K' % teff)
 			params['teff'].set(value = teff / tscale)
 			res_i = lmfit.minimize(residual, params, **lmfit_kw)
 			chi = np.sum(res_i.residual**2)
