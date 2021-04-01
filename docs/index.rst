@@ -4,15 +4,18 @@ wdtools
 .. image:: https://img.shields.io/github/v/release/vedantchandra/wdtools?include_prereleases   
    :alt: GitHub release (latest by date including pre-releases)
    
-.. image:: https://readthedocs.org/projects/wdtools/badge/?version=latest
-   :target: https://wdtools.readthedocs.io/en/latest/?badge=latest
-   :alt: Documentation Status
-   
 .. image:: https://img.shields.io/github/license/vedantchandra/wdtools   
    :alt: GitHub
    
 .. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.3828686.svg
    :target: https://doi.org/10.5281/zenodo.3828686
+
+.. image:: https://travis-ci.com/vedantchandra/wdtools.svg?branch=master
+    :target: https://travis-ci.com/vedantchandra/wdtools
+
+.. image:: https://readthedocs.org/projects/wdtools/badge/?version=latest
+   :target: https://wdtools.readthedocs.io/en/latest/?badge=latest
+   :alt: Documentation Status
 
 wdtools is a collection of techniques to characterize the atmospheric parameters of white dwarfs using spectroscopic data. The flagship class is the generative fitting pipeline (GFP), which fits ab-initio theoretical models to observed spectra in a Bayesian framework, using high-speed neural networks to interpolate synthetic spectra.
 
