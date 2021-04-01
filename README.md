@@ -17,7 +17,7 @@ Simply clone the repository to your local machine and run the following code fro
 python setup.py install
 ```
 
-This will install the code into your current Python environment, and you should be able to simply `import wdtools` into your work. If you use conda, ensure that you have activated the environment within which you wish you use this code. This code is writen and tested in Python 3.7 and 3.8 only. 
+This will install the code into your current Python environment, and you should be able to simply `import wdtools` into your work. If you use conda, ensure that you have activated the environment within which you wish you use this code before running `setup.py`. This code is writen and tested in Python 3.7 and 3.8 only. 
 
 ## Example Usage
 
