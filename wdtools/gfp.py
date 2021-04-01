@@ -3,12 +3,10 @@ import astropy
 import scipy
 import matplotlib.pyplot as plt
 from scipy import stats
-import pandas as pd
 import glob
 import pickle
 from astropy import table 
 import sys
-from tqdm import tqdm
 from scipy import interpolate
 import os
 import emcee
