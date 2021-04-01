@@ -11,5 +11,5 @@ setup(name='wdtools',
       packages=['wdtools'],
       package_data={'wdtools':['models/*', 'models/neural_gen/*']},
       dependency_links = [],
-      install_requires=['emcee', 'corner', 'tensorflow==2.4.1', 'lmfit', 'scikit-learn', 'astropy', 'numpy==1.19.2', 'pandas'],
+      install_requires=['emcee', 'corner', 'tensorflow==2.4.1', 'lmfit', 'scikit-learn', 'numpy==1.17'],
       include_package_data=True)

@@ -1,11 +1,9 @@
 import numpy as np
-import astropy
 import scipy
 import matplotlib.pyplot as plt
 from scipy import stats
 import glob
 import pickle
-from astropy import table 
 import sys
 from scipy import interpolate
 import os
@@ -33,7 +31,6 @@ sys.path.append(dir_path)
 from .spectrum import SpecTools
 
 interp1d = interpolate.interp1d
-Table = table.Table
 
 halpha = 6564.61
 hbeta = 4862.68

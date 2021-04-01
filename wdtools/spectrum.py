@@ -13,7 +13,6 @@ import numpy.polynomial.polynomial as poly
 from scipy.interpolate import interp1d
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import correlate
-from astropy import constants as c
 from scipy.interpolate import splev,splrep,LSQUnivariateSpline
 
 path = os.path.abspath(__file__)
@@ -581,7 +580,7 @@ class SpecTools():
         nfl = 1 - cfl / line
         nivar = civar * line**2
 
-        vel = c.c.value * 1e-3 * (cwl - centroid) / centroid
+        vel = 299792458 * 1e-3 * (cwl - centroid) / centroid
 
         if plot:
             plt.plot(vel, 1-nfl, 'k')

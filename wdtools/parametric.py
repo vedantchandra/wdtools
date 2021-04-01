@@ -3,12 +3,15 @@ from bisect import bisect_left
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 from lmfit.models import VoigtModel
-import pandas as pd
 import pickle
 import os
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.utils import resample
 import scipy
+try:
+	import pandas as pd
+except:
+	print('please install pandas to use the parametric modeule. otherwise, ignore this.')
 
 path = os.path.abspath(__file__)
 dir_path = os.path.dirname(path)

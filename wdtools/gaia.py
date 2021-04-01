@@ -3,15 +3,15 @@ from scipy import stats
 import emcee
 import matplotlib.pyplot as plt
 
-from astropy import units as u
 try:
     import galpy
     from galpy.orbit import Orbit
     from galpy.potential import MWPotential2014
+    from astropy.coordinates import SkyCoord
+    from astropy import units as u
 except:
-    print('Please install galpy if you want to use the Gaia functions. ')
+    print('Please install galpy if you want to use the gaia module. otherwise, ignore this.')
 
-from astropy.coordinates import SkyCoord
 import matplotlib
 
 
