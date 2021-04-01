@@ -5,9 +5,7 @@
 [![Build Status](https://travis-ci.com/vedantchandra/wdtools.svg?branch=master)](https://travis-ci.com/vedantchandra/wdtools)
 [![Documentation Status](https://readthedocs.org/projects/wdtools/badge/?version=latest)](https://wdtools.readthedocs.io/en/latest/?badge=latest)
 
-**Tutorial:** [Demo Jupyter Notebook](https://nbviewer.jupyter.org/github/vedantchandra/wdtools/blob/master/docs/examples/1_fitting_wd_spectra.ipynb)
-
-**Full Documentation (in progress):** [wdtools.readthedocs.io](https://wdtools.readthedocs.io/en/latest/).
+**Documentation:** [wdtools.readthedocs.io](https://wdtools.readthedocs.io/en/latest/).
 
 **Read the Paper:** https://ui.adsabs.harvard.edu/abs/2020MNRAS.497.2688C/abstract
 
@@ -22,27 +20,6 @@ python setup.py install
 ## Example Usage
 
 A full demo is presented in this [Jupyter Notebook](https://nbviewer.jupyter.org/github/vedantchandra/wdtools/blob/master/docs/examples/1_fitting_wd_spectra.ipynb).
-
-``` python
-import sys
-import numpy as np
-from scipy import stats
-sys.path.append('~/GitHub/wdtools/')
-
-import wdtools
-
-gfp = wdtools.GFP(resolution = 3)
-
-labels, e_labels, redchi = gfp.fit_spectrum(wl, flux, ivar,
-                                mcmc = True, nwalkers = 50, burn = 100, ndraws = 100,
-                                plot_init = True,
-                                make_plot = True, plot_corner = True, 
-                                savename = 'example')
-
-teff, e_teff = labels[0], e_labels[0]
-logg, e_logg = labels[1], e_labels[1]
-rv, e_rv = labels[2], e_labels[2]
-```
 
 ## Citing This Work
 
