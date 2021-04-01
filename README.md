@@ -17,6 +17,8 @@ Simply clone the repository to your local machine and run the following code fro
 python setup.py install
 ```
 
+The code is writen and tested in Python 3.7 and 3.8 only. 
+
 ## Example Usage
 
 A full demo is presented in this [Jupyter Notebook](https://nbviewer.jupyter.org/github/vedantchandra/wdtools/blob/master/docs/examples/1_fitting_wd_spectra.ipynb).
