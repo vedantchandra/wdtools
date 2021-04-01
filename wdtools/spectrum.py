@@ -3,7 +3,6 @@ import numpy as np
 from bisect import bisect_left
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
-import pandas as pd
 import pickle
 import os
 import scipy
