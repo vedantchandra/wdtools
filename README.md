@@ -66,6 +66,6 @@ These models also incorporate physics from the following papers (this list is no
 
 [Tassoul et al. (1990)](https://ui.adsabs.harvard.edu/abs/1990ApJS...72..335T/abstract)
 
-The random forest regression model is trained using labelled spectra from the Sloan Digital Sky Survey and [Tremblay et al. (2019)(https://ui.adsabs.harvard.edu/abs/2019MNRAS.482.5222T/abstract)]
+The random forest regression model is trained using labelled spectra from the Sloan Digital Sky Survey and [Tremblay et al. (2019)](https://ui.adsabs.harvard.edu/abs/2019MNRAS.482.5222T/abstract)
 
 
