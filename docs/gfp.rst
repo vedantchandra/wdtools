@@ -17,13 +17,11 @@ Say we have an un-normalized DA spectrum from the Sloan Digital Sky Survey (SDSS
    gfp = wdtools.GFP(resolution = 3) # Spectral dispersion in Angstroms
 
    labels, e_labels, redchi = gfp.fit_spectrum(wl, flux, ivar,
-                                fullspec = True, mcmc = True, nwalkers = 50, burn = 100, ndraws = 100,
+                                mcmc = True, nwalkers = 50, burn = 100, ndraws = 100,
                                 make_plot = True, plot_corner = True
                                 )
 
-The GFP first estimates the radial velocity of the provided spectrum using the H-alpha absorption line. The synthetic models are shifted to this RV during the fitting process–hence there is no interpolation or re-binning of the observed spectrum, preventing correlated errors. The spectrum is then spline-normalized, during which the strong Balmer lines are masked out. 
-
-If the ``fullspec`` argument is ``True``, then the entire spectrum is used during the fitting process. Otherwise, only the Balmer lines are used in the likelihood. You can select which Balmer lines to include in the fit with the ``lines`` argument (defaults to all lines from 'alpha' to 'h8'). 
+The GFP first estimates the radial velocity of the provided spectrum using the H-alpha absorption line. The synthetic models are shifted to this RV during the fitting process–hence there is no interpolation or re-binning of the observed spectrum, preventing correlated errors. The spectrum is then spline-normalized, during which the strong Balmer lines are masked out. By default, only the Balmer lines are used in the likelihood. You can select which Balmer lines to include in the fit with the ``lines`` argument (defaults to all lines from 'alpha' to 'h8'). 
 
 Then, the ``lmfit`` least squares routine is used to fit the stellar parameters. The fit is initialized at several equidistant initial temperatures governed by the ``nteff`` keyword. The fit with the lowest chi-square is selected and returned. 
 

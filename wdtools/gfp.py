@@ -560,7 +560,8 @@ class GFP:
 		except:
 			e_teff = np.nan
 			e_logg = np.nan
-			print('no errors from lmfit...')
+			if verbose:
+				print('no errors from lmfit...')
 
 		try:
 			e_coefs = [res.params['c_' + str(ii)].stderr for ii in range(polyorder)]
@@ -588,9 +589,6 @@ class GFP:
 				sigmas = np.abs(1e-2 * np.array(mle)) # USE 1% ERROR
 
 			init = mle
-
-			print(mle)
-			print(sigmas)
 
 			for jj in range(ndim):
 					pos0[:,jj] = (init[jj] + sigmas[jj]*np.random.normal(size = nwalkers))
