@@ -15,6 +15,7 @@ galpy
 nbsphinx
 sphinx-autoapi
 sphinxcontrib-bibtex<2.0.0
+ipython
 
 # For testing:
 pytest
