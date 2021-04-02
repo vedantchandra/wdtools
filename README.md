@@ -21,7 +21,7 @@ This will install the code into your current Python environment, and you should 
 
 ## Example Usage
 
-A full demo is presented in this [Jupyter Notebook](https://nbviewer.jupyter.org/github/vedantchandra/wdtools/blob/master/docs/examples/1_fitting_wd_spectra.ipynb).
+A full demo is presented in this [Jupyter Notebook](https://wdtools.readthedocs.io/en/latest/examples/1_fitting_wd_spectra.html).
 
 ## Citing This Work
 
