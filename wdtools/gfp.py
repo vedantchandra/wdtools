@@ -29,6 +29,7 @@ dir_path = os.path.dirname(path)
 sys.path.append(dir_path)
 
 from .spectrum import SpecTools
+from .corr3d import *
 
 interp1d = interpolate.interp1d
 
@@ -317,7 +318,7 @@ class GFP:
 						verbose = True,
 						lines = ['alpha', 'beta', 'gamma', 'delta', 'eps', 'h8'], lmfit_kw = dict(method = 'leastsq', epsfcn = 0.1), 
 						rv_kw = dict(plot = False, distance = 100, nmodel = 2, edge = 15),
-						nteff = 3,  rv_line = 'alpha'):
+						nteff = 3,  rv_line = 'alpha', corr_3d = False):
 
 		"""
 		Main fitting routine, takes a continuum-normalized spectrum and fits it with MCMC to recover steller labels. 
@@ -383,6 +384,8 @@ class GFP:
 			Number of equidistant temperatures to try as initialization points for the minimization routine. 
 		rv_line : str, optional
 			Which Balmer line to use for the radial velocity fit. We recommend 'alpha'. 
+		corr_3d : bool, optional
+			If True, applies 3D corrections from Tremblay et al. (2013) to stellar parameters before returning them. 
 
 		Returns
 		-------
@@ -647,6 +650,12 @@ class GFP:
 
 		fit_fl = self.spectrum_sampler(wl, *mle)
 
+		if corr_3d and mle[0] < 15000:
+			if verbose:
+				print('applying 3D corrections...')
+			corr = corr3d(mle[0], mle[1])
+			mle[0] = corr[0]
+			mle[1] = corr[1]
 
 		if make_plot:
 			#fig,ax = plt.subplots(ndim, ndim, figsize = (15,15))
