@@ -30,7 +30,7 @@ def test_gfp():
 			print(e_labels)
 			print(redchi)
 
-			assert labels[0] < teff + 500 and labels[0] > teff - 500
+			assert labels[0] < teff + 1000 and labels[0] > teff - 1000
 			assert labels[1] < logg + 0.25 and labels[1] > logg - 0.25
 
 if __name__ == '__main__':
