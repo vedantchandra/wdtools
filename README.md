@@ -5,9 +5,9 @@
 [![Build Status](https://travis-ci.com/vedantchandra/wdtools.svg?branch=master)](https://travis-ci.com/vedantchandra/wdtools)
 [![Documentation Status](https://readthedocs.org/projects/wdtools/badge/?version=latest)](https://wdtools.readthedocs.io/en/latest/?badge=latest)
 
-**Documentation:** [wdtools.readthedocs.io](https://wdtools.readthedocs.io/en/latest/).
-
-**Read the Paper:** https://ui.adsabs.harvard.edu/abs/2020MNRAS.497.2688C/abstract
+<p align="center">
+  <a href="https://wdtools.readthedocs.io/en/latest/">Documentation</a> | <a href="https://ui.adsabs.harvard.edu/abs/2020MNRAS.497.2688C/abstract">Read the Paper</a>
+</p>
 
 ## Installation
 
