@@ -56,18 +56,16 @@ You may also be interested in https://github.com/SihaoCheng/WD_models, which pro
 
 If using the pre-trained generative neural network for white dwarf model atmospheres, kindly cite the original paper that describes these models: 
 
-Koester (2010) [[ADS](https://ui.adsabs.harvard.edu/abs/2010MmSAI..81..921K/abstract)]
+[Koester (2010)](https://ui.adsabs.harvard.edu/abs/2010MmSAI..81..921K/abstract)
 
 These models also incorporate physics from the following papers (this list is not exhaustive):
 
-Fontaine (2001) [[ADS](https://ui.adsabs.harvard.edu/abs/2001PASP..113..409F/abstract)]
+[Fontaine (2001)](https://ui.adsabs.harvard.edu/abs/2001PASP..113..409F/abstract)
 
-Tremblay & Bergeron (2009) [[ADS](https://ui.adsabs.harvard.edu/abs/2009ApJ...696.1755T/abstract)]
+[Tremblay & Bergeron (2009)](https://ui.adsabs.harvard.edu/abs/2009ApJ...696.1755T/abstract)
 
-Tassoul et al. (1990) [[ADS](https://ui.adsabs.harvard.edu/abs/1990ApJS...72..335T/abstract)]
+[Tassoul et al. (1990)](https://ui.adsabs.harvard.edu/abs/1990ApJS...72..335T/abstract)
 
-The random forest regression model is trained using labelled spectra from the Sloan Digital Sky Survey and Tremblay et al. (2019):
-
-Tremblay et al. (2019) [[ADS](https://ui.adsabs.harvard.edu/abs/2019MNRAS.482.5222T/abstract)]
+The random forest regression model is trained using labelled spectra from the Sloan Digital Sky Survey and [Tremblay et al. (2019)(https://ui.adsabs.harvard.edu/abs/2019MNRAS.482.5222T/abstract)]
 
 
