@@ -13,9 +13,75 @@ from scipy.interpolate import interp1d
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import correlate
 from scipy.interpolate import splev,splrep,LSQUnivariateSpline
+from numba import jit, njit
+
+c = 2.99792458e5
 
 path = os.path.abspath(__file__)
 dir_path = os.path.dirname(path)
+
+
+@jit(nopython = True)
+def doppler_shift(wl, fl, dv):
+    return np.interp(wl * np.sqrt((1 - dv/c)/(1 + dv/c)), wl, fl)
+
+@jit(nopython = True)
+def xcorr_rv(wl, fl, temp_wl, temp_fl, init_rv = 0, rv_range = 500, npoint = None):
+    # if npoint is None:
+    #     npoint = int(2 * rv_range)
+    rvgrid = np.linspace(init_rv - rv_range, init_rv + rv_range, npoint)
+    cc = np.zeros(npoint)
+    for ii,rv in enumerate(rvgrid):
+        shift_model = doppler_shift(temp_wl, temp_fl, rv)
+        corr = np.corrcoef(fl, shift_model)[1, 0]
+        cc[ii] = corr
+    return rvgrid, cc
+
+@jit(nopython = True)
+def quad_max(rv, cc):
+    maxpt = np.argmax(cc)
+    max_rv = rv[maxpt]
+    # in1 = maxpt - 5
+    # in2 = maxpt + 5
+    # rv,cc = rv[in1:in2], cc[in1:in2]
+    # pfit = np.polynomial.polynomial.polyfit(rv, cc, 2)
+    # max_rv = - pfit[1] / (2 * pfit[2])
+
+    # plt.plot(rv, cc)
+    # plt.axvline(max_rv)
+    # plt.show()
+    return max_rv
+
+@jit(nopython = True)
+def get_one_rv(wl, fl, temp_wl, temp_fl, r1 = 1000, p1 = 100, r2 = 100, p2 = 100): # IMPLEMENT UNCERTAINTIES AT SPECTRUM LEVEL
+    rv, cc = xcorr_rv(wl, fl, temp_wl, temp_fl, init_rv = 0, rv_range = r1, npoint = p1)
+
+    # if plot:
+    #     plt.plot(rv, cc, color = 'k', alpha = 0.1)
+
+    rv_guess = quad_max(rv, cc)
+    rv, cc = xcorr_rv(wl, fl, temp_wl, temp_fl, init_rv = rv_guess, rv_range = r2, npoint = p2)
+    return quad_max(rv, cc)
+
+@jit(nopython = True, cache = True)
+def get_rv(wl, fl, ivar, temp_wl, temp_fl, N = 100):
+
+    nans = np.isnan(fl) + np.isnan(ivar) + np.isnan(temp_fl)
+
+    # if np.sum(nans) > 0:
+    #     wl = wl[~nans]
+    #     fl = fl[~nans]
+    #     ivar = ivar[~nans]
+    #     temp_wl = temp_wl[~nans]
+    #     temp_fl = temp_fl[~nans]
+
+    rv = get_one_rv(wl, fl, temp_wl, temp_fl)
+
+    rvs = np.zeros(N)
+    for ii in range(N):
+        fl_i = fl + np.sqrt(1/(ivar + 1e-10)) * np.random.randn(len(fl))
+        rvs[ii] = get_one_rv(wl, fl_i, temp_wl, temp_fl)
+    return rv, (np.quantile(rvs, 0.84) - np.quantile(rvs, 0.16)) / 2
 
 class SpecTools():
 
@@ -433,71 +499,6 @@ class SpecTools():
             
         return mean_centre, final_centre, sigma_final_centre, sigma_propagated, sigma_sample
 
-    def doppler_shift(self, wl, fl, dv):
-        c = 2.99792458e5
-        df = np.sqrt((1 - dv/c)/(1 + dv/c)) 
-        new_wl = wl * df
-        new_fl = np.interp(new_wl, wl, fl)
-        return new_fl
-
-    def xcorr_rv(self, wl, fl, temp_wl, temp_fl, init_rv = 0, rv_range = 500, npoint = None):
-        if npoint is None:
-            npoint = int(2 * rv_range)
-        rvgrid = np.linspace(init_rv - rv_range, init_rv + rv_range, npoint)
-        cc = np.zeros(npoint)
-        for ii,rv in enumerate(rvgrid):
-            shift_model = self.doppler_shift(temp_wl, temp_fl, rv)
-            corr = np.corrcoef(fl, shift_model)[1, 0]
-            #corr = -np.sum((fl - shift_model)**2) # MINIMIZE LSQ DIFF. MAYBE PROPAGATE IVAR HERE?
-            cc[ii] = corr
-        return rvgrid, cc
-
-    def quad_max(self, rv, cc):
-        maxpt = np.argmax(cc)
-        max_rv = rv[maxpt]
-        # in1 = maxpt - 5
-        # in2 = maxpt + 5
-        # rv,cc = rv[in1:in2], cc[in1:in2]
-        # pfit = np.polynomial.polynomial.polyfit(rv, cc, 2)
-        # max_rv = - pfit[1] / (2 * pfit[2])
-
-        # plt.plot(rv, cc)
-        # plt.axvline(max_rv)
-        # plt.show()
-        return max_rv
-
-    def get_one_rv(self, wl, fl, temp_wl, temp_fl, r1 = 1000, p1 = 100, r2 = 100, p2 = 100, plot = False): # IMPLEMENT UNCERTAINTIES AT SPECTRUM LEVEL
-        rv, cc = self.xcorr_rv(wl, fl, temp_wl, temp_fl, init_rv = 0, rv_range = r1, npoint = p1)
-
-        # if plot:
-        #     plt.plot(rv, cc, color = 'k', alpha = 0.1)
-
-        rv_guess = self.quad_max(rv, cc)
-        rv, cc = self.xcorr_rv(wl, fl, temp_wl, temp_fl, init_rv = rv_guess, rv_range = r2, npoint = p2)
-        if plot:
-            plt.plot(rv, cc, color = 'k', alpha = 0.1)
-        return self.quad_max(rv, cc)
-
-    def get_rv(self, wl, fl, ivar, temp_wl, temp_fl, N = 100, kwargs = {}):
-
-        nans = np.isnan(fl) + np.isnan(ivar) + np.isnan(temp_fl)
-
-        if np.sum(nans) > 0:
-            print("NaNs detected in RV routine... removing them...")
-            wl = wl[~nans]
-            fl = fl[~nans]
-            ivar = ivar[~nans]
-            temp_wl = temp_wl[~nans]
-            temp_fl = temp_fl[~nans]
-
-        rv = self.get_one_rv(wl, fl, temp_wl, temp_fl, **kwargs)
-
-        rvs = [];
-        for ii in range(N):
-            fl_i = fl + np.sqrt(1/(ivar + 1e-10)) * np.random.normal(size = len(fl))
-            rvs.append(self.get_one_rv(wl, fl_i, temp_wl, temp_fl, **kwargs))
-        return rv, (np.quantile(rvs, 0.84) - np.quantile(rvs, 0.16)) / 2
-
     def spline_norm(self, wl, fl, ivar, exclude_wl, sfac = 1, k = 3, plot = False, niter = 0):
         
         fl_norm = fl / np.nanmedian(fl)
@@ -563,7 +564,7 @@ class SpecTools():
 
 
     def get_line_rv(self, wl, fl, ivar, centroid, template = None, return_template = False, distance = 50, edge = 10, nmodel = 2, plot = False, rv_kwargs = {},
-                        init_width = 20, init_amp = 5):
+                        init_width = 20, init_amp = 5, lmfit_kw = {}):
 
         c1 = bisect_left(wl, centroid - distance)
         c2 = bisect_left(wl, centroid + distance)
@@ -599,13 +600,14 @@ class SpecTools():
             #print(init_center)
 
             for ii in range(nmodel):
-                params['g' + str(ii) + '_center'].set(value = init_center, vary = False, expr = 'g0_center')
-                params['g' + str(ii) + '_sigma'].set(value = init_width, vary = True)
-                params['g' + str(ii) + '_amplitude'].set(value = init_amp/nmodel, vary = True)
+                params['g' + str(ii) + '_center'].set(value = init_center, vary = False, expr = 'g0_center',
+                                                        min = init_center - 10, max = init_center + 10)
+                params['g' + str(ii) + '_sigma'].set(value = init_width, vary = True, min = 0)
+                params['g' + str(ii) + '_amplitude'].set(value = init_amp/nmodel, vary = True, min = 0)
 
-            params['g0_center'].set(value = init_center, vary = True, expr = None)
+            params['g0_center'].set(value = init_center, vary = True, expr = None, min = init_center - 10, max = init_center + 10)
 
-            res = model.fit(nfl, params, x = cwl, method = 'nelder')
+            res = model.fit(nfl, params, x = cwl, weights = (1 / np.sqrt(nivar)), method = 'leastsq')
 
             res.params['g0_center'].set(value = centroid)
 
@@ -614,10 +616,10 @@ class SpecTools():
             if plot:
                 plt.plot(vel, 1-model.eval(params, x = cwl), 'b')
 
-        rv, e_rv = self.get_rv(cwl, nfl, nivar, cwl, template, **rv_kwargs)
+        rv, e_rv = get_rv(cwl, nfl, nivar, cwl, template)
 
         if plot:
-            plt.plot(vel, 1 - self.doppler_shift(cwl, template, rv), 'r')
+            plt.plot(vel, 1 - doppler_shift(cwl, template, rv), 'r')
             plt.xlabel('Relative Velocity')
             plt.ylabel('Normalized Flux')
             plt.title('RV = %.1f ± %.1f km/s' % (rv, e_rv))

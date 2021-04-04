@@ -28,7 +28,7 @@ path = os.path.abspath(__file__)
 dir_path = os.path.dirname(path)
 sys.path.append(dir_path)
 
-from .spectrum import SpecTools
+from .spectrum import *
 from .corr3d import *
 
 interp1d = interpolate.interp1d
@@ -205,7 +205,7 @@ class GFP:
 		label = self.label_sc(np.asarray(np.stack((teff,logg)).reshape(1,-1)))
 		synth = self.model[specclass].predict(label)[0]
 		synth = 10**self.inv_spec_sc(synth)
-		synth = self.sp.doppler_shift(self.lamgrid[specclass], synth, rv)
+		synth = doppler_shift(self.lamgrid[specclass], synth, rv)
 		synth =  (np.ravel(synth).astype('float64'))
 
 		return synth
