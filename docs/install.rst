@@ -4,7 +4,7 @@ Installation
 Downloading and Installing wdtools
 ++++++++++++++++++++++++++++++++++++
 
-Please note that wdtools is only supported and tested for Python 3.7 and 3.8. The installation will load particular versions of certain libararies like ``numpy`` and ``tensorflow``. Therefore, it is strongly recommended that you use ``wdtools`` in its own virtual environment using a manager like ``conda``. 
+Please note that wdtools is only supported and tested for Python 3.7 and 3.8. The installation will load specific versions of libararies like ``numpy`` and ``tensorflow`` to ensure that all the libraries play well together. Therefore, it is strongly recommended that you install and use ``wdtools`` in its own virtual environment using a manager like ``conda``. If you use ``conda``, make sure to proceed with installation only once you've activated the ``conda`` environment you want to use ``wdtools`` within.
 
 The simplest way to install wdtools is to clone the GitHub repository into any directory of your choice:
 
@@ -15,7 +15,7 @@ The simplest way to install wdtools is to clone the GitHub repository into any d
 
 You can replace the first line with any directory of your choice.
 
-Next, navigate to this directory and run ``python setup.py install``. This should install the required dependencies and add ``wdtools`` to your Python path. If you use ``conda``, make sure to execute this command within the ``conda`` environment you want to use ``wdtools`` within. All the required dependencies are also listed in the ``requirements.txt`` file in the repository.
+Next, navigate to this directory and run ``python setup.py install``. This should install the required dependencies and add ``wdtools`` to your Python path.  All the required dependencies are also listed in the ``requirements.txt`` file in the repository.
 
 Once installed, you can add the following line to your Python projects to import wdtools into your workspace:
 
