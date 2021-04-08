@@ -10,7 +10,7 @@ try:
     from astropy.coordinates import SkyCoord
     from astropy import units as u
 except:
-    print('Please install galpy if you want to use the gaia module. otherwise, ignore this.')
+    print('Please install galpy and astropy if you want to use the gaia module. otherwise, ignore this.')
 
 import matplotlib
 
