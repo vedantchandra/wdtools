@@ -1,6 +1,9 @@
-from wdtools.gfp import GFP
-from wdtools.spectrum import SpecTools
-from wdtools.parametric import LineProfiles
+try:
+    from wdtools.gfp import GFP
+    from wdtools.spectrum import SpecTools
+    from wdtools.parametric import LineProfiles
+except:
+    print('failed to import GFP. only gaia subroutines will work')
 #from wdtools.neural import CNN
 from wdtools.gaia import *
 from wdtools.corr3d import *
