@@ -6,7 +6,7 @@ pandas
 astropy
 corner
 tqdm
-tensorflow==2.5.2
+tensorflow==2.7.2
 lmfit
 scikit-learn
 galpy
